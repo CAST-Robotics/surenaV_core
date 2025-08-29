@@ -585,16 +585,34 @@ inline QByteArray Epos::CreateServoHeadCommand(QList<int> motorPositions)
     return command;
 }
 //========================================================================
-inline QByteArray Epos::CreateWaistAndHeadCommand(QList<int> motorPositions)
+inline QByteArray Epos::CreatePalmCommand(QList<int> motorPositions)
 {
     QByteArray command;
 //   QLOG_TRACE()<<"motor:"<<motorPositions[20]<<" "<<motorPositions[21]<<" "<<motorPositions[22];
     command.append(0x02);
     command.append(0x81);
-    command.append(motorPositions[23]);
-    command.append(motorPositions[24]);
-    command.append(motorPositions[25]);
-    command.append( QByteArray(5, Qt::Initialization::Uninitialized));
+
+    // command.append(motorPositions[23]);
+    // command.append(motorPositions[24]);
+    // command.append(motorPositions[25]);
+    // command.append(motorPositions[23]);
+    // command.append(motorPositions[24]);
+    // command.append(motorPositions[25]);
+    // command.append(motorPositions[23]);
+    // command.append(motorPositions[24]);
+ 
+
+    command.append(1);
+    command.append(2);
+    command.append(3);
+    command.append(4);
+    command.append(5);
+    command.append(6);
+    command.append(7);
+    command.append(8);
+ 
+
+   // command.append( QByteArray(5, Qt::Initialization::Uninitialized));
     return command;
 //     static int state=0;
 
@@ -643,7 +661,7 @@ void Epos::SetAllPositionCST(QList<int> motorPositions)
     for(int i=0; i< 12; i++)
         command.append(MotorDataToArray(0x401,motorPositions.at(i)));
     command.append(CreateHandPacket(motorPositions));
-    command.append(CreateWaistAndHeadCommand(motorPositions));
+    command.append(CreatePalmCommand(motorPositions));
     command.append(CreateServoHeadCommand(motorPositions));
     //    //packet must be 300 bytes 180 byte zero
     command.append(QByteArray(ReserveByteCount, Qt::Initialization::Uninitialized));
