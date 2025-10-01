@@ -4,10 +4,11 @@
 HandManager::HandManager(ros::NodeHandle *n) : 
     hand_func_R(RIGHT), 
     hand_func_L(LEFT),
+
     // Initialize parameters
     T(0.005),
     rate(200),
-    simulation(false),
+    simulation(true),
     X(1.0), Y(0.0), Z(0.0),
     tempX(1.0), tempY(0.0), tempZ(0.0),
     h_pitch(0), h_roll(0), h_yaw(0),
@@ -49,8 +50,8 @@ HandManager::HandManager(ros::NodeHandle *n) :
     
 
     // ROS Communication Setup
-    trajectory_data_pub = n->advertise<std_msgs::Int32MultiArray>("jointdata/qc", 100);
-    gazeboJointStatePub_ = n->advertise<std_msgs::Float64MultiArray>("/joint_angles_gazebo", 100);
+    // trajectory_data_pub = n->advertise<std_msgs::Int32MultiArray>("jointdata/qc", 100);
+    // gazeboJointStatePub_ = n->advertise<std_msgs::Float64MultiArray>("/joint_angles_gazebo", 100);
     camera_data_sub = n->subscribe("/detection_info", 1, &HandManager::object_detect_callback, this);
     joint_qc_sub = n->subscribe("jointdata/qc", 100, &HandManager::joint_qc_callback, this);
     teleoperation_data_sub = n->subscribe("teleoperation/angles", 100, &HandManager::teleoperation_callback, this);
@@ -109,6 +110,16 @@ void HandManager::object_detect_callback(const hand_planner::DetectionInfoArray 
         }
     }
     X = tempX; Y = tempY; Z = tempZ;
+}
+
+const std::vector<double>& HandManager::getHandMotorCommands() const {
+    std::lock_guard<std::mutex> lock(command_mutex_);
+    return hand_motor_commands_;
+}
+
+const std::vector<double>& HandManager::getHandGazeboCommands() const {
+    std::lock_guard<std::mutex> lock(command_mutex_);
+    return hand_gazebo_commands_;
 }
 
 void HandManager::joint_qc_callback(const std_msgs::Int32MultiArray::ConstPtr &qcArray) {
@@ -259,99 +270,81 @@ VectorXd HandManager::reach_target(S5_hand& hand_model, VectorXd& q_arm, MatrixX
     return hand_model.r_palm;
 }
 
-void HandManager::publishMotorData(const VectorXd& q_rad_right, const VectorXd& q_rad_left, const Vector3d& head_angles) {
-     /* The function automatically:
-      * - Converts radians to encoder counts for real robot
-      * - Handles wrist calculations
-      * - Publishes to appropriate topics (/jointdata/qc or /joint_angles_gazebo)
-      * - Supports both simulation and real robot modes
-      * - ALWAYS publishes data for all 29 joints (use zero vectors for joints you don't want to control)
-    */
-    vector<double> q_motor(29, 0.0);
-    vector<double> q_gazebo(29, 0.0);
+void HandManager::sendHandMotorCommands(const VectorXd& q_rad_right, const VectorXd& q_rad_left, const Vector3d& head_angles) {
+    
+    std::lock_guard<std::mutex> lock(command_mutex_); // Acquire lock
+    std::vector<double> q_motor_temp(29, 0); 
+    std::vector<double> q_gazebo_temp(29, 0.0);
 
     if (!simulation) {
         // Right hand motors (indices 12-15)
-        q_motor[12] = int(q_rad_right(0) * encoderResolution[0] * harmonicRatio[0] / (2 * M_PI));
-        q_motor[13] = -int(q_rad_right(1) * encoderResolution[0] * harmonicRatio[1] / (2 * M_PI));
-        q_motor[14] = int(q_rad_right(2) * encoderResolution[1] * harmonicRatio[2] / (2 * M_PI));
-        q_motor[15] = -int(q_rad_right(3) * encoderResolution[1] * harmonicRatio[3] / (2 * M_PI));
-        
+        q_motor_temp[12] = int(q_rad_right(0) * encoderResolution[0] * harmonicRatio[0] / (2 * M_PI));
+        q_motor_temp[13] = -int(q_rad_right(1) * encoderResolution[0] * harmonicRatio[1] / (2 * M_PI));
+        q_motor_temp[14] = int(q_rad_right(2) * encoderResolution[1] * harmonicRatio[2] / (2 * M_PI));
+        q_motor_temp[15] = -int(q_rad_right(3) * encoderResolution[1] * harmonicRatio[3] / (2 * M_PI));
+
         // Left hand motors (indices 16-19)
-        q_motor[16] = -int(q_rad_left(0) * encoderResolution[0] * harmonicRatio[0] / (2 * M_PI));
-        q_motor[17] = -int(q_rad_left(1) * encoderResolution[0] * harmonicRatio[1] / (2 * M_PI));
-        q_motor[18] = int(q_rad_left(2) * encoderResolution[1] * harmonicRatio[2] / (2 * M_PI));
-        q_motor[19] = int(q_rad_left(3) * encoderResolution[1] * harmonicRatio[3] / (2 * M_PI));
-        
+        q_motor_temp[16] = -int(q_rad_left(0) * encoderResolution[0] * harmonicRatio[0] / (2 * M_PI));
+        q_motor_temp[17] = -int(q_rad_left(1) * encoderResolution[0] * harmonicRatio[1] / (2 * M_PI));
+        q_motor_temp[18] = int(q_rad_left(2) * encoderResolution[1] * harmonicRatio[2] / (2 * M_PI));
+        q_motor_temp[19] = int(q_rad_left(3) * encoderResolution[1] * harmonicRatio[3] / (2 * M_PI));
+
         // Head motors (indices 20-22) - roll, pitch, yaw
-        q_motor[20] = int(roll_command_range[0] + (roll_command_range[1] - roll_command_range[0]) * 
+        q_motor_temp[20] = int(roll_command_range[0] + (roll_command_range[1] - roll_command_range[0]) *
                          ((-(head_angles(0)*180/M_PI) - roll_range[0]) / (roll_range[1] - roll_range[0])));
-        q_motor[21] = int(pitch_command_range[0] + (pitch_command_range[1] - pitch_command_range[0]) * 
+        q_motor_temp[21] = int(pitch_command_range[0] + (pitch_command_range[1] - pitch_command_range[0]) *
                          ((-(head_angles(1)*180/M_PI) - pitch_range[0]) / (pitch_range[1] - pitch_range[0])));
-        q_motor[22] = int(yaw_command_range[0] + (yaw_command_range[1] - yaw_command_range[0]) * 
+        q_motor_temp[22] = int(yaw_command_range[0] + (yaw_command_range[1] - yaw_command_range[0]) *
                          ((-(head_angles(2)*180/M_PI) - yaw_range[0]) / (yaw_range[1] - yaw_range[0])));
-        
+
         // Wrist calculations for right hand (indices 23-25)
-        q_motor[23] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
+        q_motor_temp[23] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
                             (((q_rad_right(4) * 180 / M_PI) - wrist_yaw_range[0]) / (wrist_yaw_range[1] - wrist_yaw_range[0])));
-        q_motor[24] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
+        q_motor_temp[24] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
                             (((hand_func_R.wrist_right_calc(q_rad_right(5), q_rad_right(6))) - (wrist_right_range[0])) / (wrist_right_range[1] - (wrist_right_range[0]))));
-        q_motor[25] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
+        q_motor_temp[25] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
                             (((hand_func_R.wrist_left_calc(q_rad_right(5), q_rad_right(6))) - wrist_left_range[0]) / (wrist_left_range[1] - wrist_left_range[0])));
-    
+
         // Wrist calculations for left hand (indices 26-28)
-        q_motor[26] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
+        q_motor_temp[26] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
                             (((q_rad_left(4) * 180 / M_PI) - wrist_yaw_range[0]) / (wrist_yaw_range[1] - wrist_yaw_range[0])));
-        q_motor[27] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
+        q_motor_temp[27] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
                             (((hand_func_L.wrist_right_calc(q_rad_left(5), q_rad_left(6))) - (wrist_right_range[0])) / (wrist_right_range[1] - (wrist_right_range[0]))));
-        q_motor[28] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
+        q_motor_temp[28] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
                             (((hand_func_L.wrist_left_calc(q_rad_left(5), q_rad_left(6))) - wrist_left_range[0]) / (wrist_left_range[1] - wrist_left_range[0])));
-        
-        // Publish motor data
-        std_msgs::Int32MultiArray trajectory_data;
-        for(int i = 0; i < 29; i++) { 
-            trajectory_data.data.push_back(q_motor[i]); 
-        }
-        trajectory_data_pub.publish(trajectory_data);
-        // cout << "robot_right" << ", " << q_motor[12] << ", " << q_motor[13] << ", " << q_motor[14] << ", " << q_motor[15] << ", " << q_motor[23] << ", " << q_motor[24] << ", " << q_motor[25] << endl;
-        // cout << "robot_left" << ", " << q_motor[16] << ", " << q_motor[17] << ", " << q_motor[18] << ", " << q_motor[19] << ", " << q_motor[26] << ", " << q_motor[27] << ", " << q_motor[28] << endl;
-        last_q_motor = q_motor;
-        
+
+        hand_motor_commands_ = q_motor_temp; // Store for RobotManager
+        last_q_motor = q_motor_temp; // Still useful for internal tracking if needed
+
     } else { // simulation
         // Right hand joints
-        q_gazebo[12] = q_rad_right(0);  
-        q_gazebo[13] = q_rad_right(1);   
-        q_gazebo[14] = q_rad_right(2);  
-        q_gazebo[15] = q_rad_right(3);
-        
+        q_gazebo_temp[12] = q_rad_right(0);
+        q_gazebo_temp[13] = q_rad_right(1);
+        q_gazebo_temp[14] = q_rad_right(2);
+        q_gazebo_temp[15] = q_rad_right(3);
+
         // Left hand joints
-        q_gazebo[16] = q_rad_left(0);  
-        q_gazebo[17] = q_rad_left(1);   
-        q_gazebo[18] = q_rad_left(2);  
-        q_gazebo[19] = q_rad_left(3);
-        
+        q_gazebo_temp[16] = q_rad_left(0);
+        q_gazebo_temp[16] = q_rad_left(1);
+        q_gazebo_temp[18] = q_rad_left(2);
+        q_gazebo_temp[19] = q_rad_left(3);
+
         // Head joints
-        q_gazebo[20] = -head_angles(0); // roll
-        q_gazebo[21] = -head_angles(1); // pitch
-        q_gazebo[22] = -head_angles(2); // yaw
-        
+        q_gazebo_temp[20] = -head_angles(0); // roll
+        q_gazebo_temp[21] = -head_angles(1); // pitch
+        q_gazebo_temp[22] = -head_angles(2); // yaw
+
         // Wrist joints for right hand
-        q_gazebo[23] = q_rad_right(4);   
-        q_gazebo[24] = q_rad_right(5);  
-        q_gazebo[25] = q_rad_right(6);
-        
+        q_gazebo_temp[23] = q_rad_right(4);
+        q_gazebo_temp[24] = q_rad_right(5);
+        q_gazebo_temp[25] = q_rad_right(6);
+
         // Wrist joints for left hand
-        q_gazebo[26] = q_rad_left(4);   
-        q_gazebo[27] = q_rad_left(5);  
-        q_gazebo[28] = q_rad_left(6); 
-        
-        // Publish gazebo data
-        joint_angles_gazebo_.data.clear();
-        for (int i = 0; i < 29; i++) {
-            joint_angles_gazebo_.data.push_back(q_gazebo[i]);
-        }
-        gazeboJointStatePub_.publish(joint_angles_gazebo_);
-        // cout << "gazebo_sim" << ", " << q_gazebo[12] << ", " << q_gazebo[13] << ", " << q_gazebo[14] << ", " << q_gazebo[15] << ", " << q_gazebo[23] << ", " << q_gazebo[24] << ", " << q_gazebo[25] << endl;
+        q_gazebo_temp[26] = q_rad_left(4);
+        q_gazebo_temp[27] = q_rad_left(5);
+        q_gazebo_temp[28] = q_rad_left(6);
+
+        hand_gazebo_commands_ = q_gazebo_temp; // Store for RobotManager
     }
 }
 
@@ -391,8 +384,7 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             q_send.head(4) = q_abs.head(4) - q_right_baseline_.head(4);
             Eigen::VectorXd q_left = Eigen::VectorXd::Zero(7);
             Eigen::Vector3d head_angles(0,0,0);
-            publishMotorData(q_send, q_left, head_angles);
-            ros::spinOnce();
+            sendHandMotorCommands(q_send, q_left, head_angles);
             rate_.sleep();
         }
 
@@ -415,8 +407,7 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             Eigen::VectorXd q_rad_right = Eigen::VectorXd::Zero(7);
             Eigen::VectorXd q_rad_left  = qref_l.col(id);
             Eigen::Vector3d head_angles(0, 0, 0);
-            publishMotorData(q_rad_right, q_rad_left, head_angles);
-            ros::spinOnce();
+            sendHandMotorCommands(q_rad_right, q_rad_left, head_angles);
             rate_.sleep();
         }
 
@@ -451,8 +442,7 @@ bool HandManager::both_hands(hand_planner::move_hand_both::Request &req, hand_pl
         VectorXd q_rad_r = qref_r.col(id);
         VectorXd q_rad_l = qref_l.col(id);
         Vector3d head_angles(0, 0, 0);
-        publishMotorData(q_rad_r, q_rad_l, head_angles);
-        ros::spinOnce();
+        sendHandMotorCommands(q_rad_r, q_rad_l, head_angles);
         rate_.sleep();
     }
 
@@ -514,8 +504,7 @@ bool HandManager::grip_online(hand_planner::gripOnline::Request &req, hand_plann
         VectorXd q_delta = current_q_ra - initial_q_ra;
         VectorXd q_rad_left = VectorXd::Zero(7);
         Vector3d head_angles(h_roll, h_pitch, h_yaw);
-        publishMotorData(q_delta, q_rad_left, head_angles);
-        ros::spinOnce();
+        sendHandMotorCommands(q_delta, q_rad_left, head_angles);
         rate_.sleep();
         t_grip += T;
     }
@@ -553,8 +542,7 @@ bool HandManager::head_track_handler(hand_planner::head_track::Request &req, han
         VectorXd q_rad_right = VectorXd::Zero(7);
         VectorXd q_rad_left = VectorXd::Zero(7);
         Vector3d head_angles(h_roll, h_pitch, h_yaw);
-        publishMotorData(q_rad_right, q_rad_left, head_angles);
-        ros::spinOnce();
+        sendHandMotorCommands(q_rad_right, q_rad_left, head_angles);
         rate_.sleep();
     }
     ROS_INFO("Head tracking finished.");
@@ -569,8 +557,7 @@ bool HandManager::teleoperation_handler(std_srvs::Empty::Request &req, std_srvs:
         VectorXd q_rad_right = q_rad_teleop.segment(0, 7);
         VectorXd q_rad_left = q_rad_teleop.segment(7, 7);
         Vector3d head_angles(0, 0, 0);
-        publishMotorData(q_rad_right, q_rad_left, head_angles);
-        ros::spinOnce();
+        sendHandMotorCommands(q_rad_right, q_rad_left, head_angles);
         rate_.sleep();
     }
     return true;
@@ -594,7 +581,7 @@ bool HandManager::write_string_handler(hand_planner::WriteString::Request &req,
         VectorXd q_send = q_abs;
         q_send.head(4) = q_abs.head(4) - q_right_baseline_.head(4);
         VectorXd ql = VectorXd::Zero(7);
-        publishMotorData(q_send, ql, Vector3d(0,0,0));
+        sendHandMotorCommands(q_send, ql, Vector3d(0,0,0));
     };
 
     if (!approachWhiteboard(hand_func_R, coef_generator, q, r_target, R_target, T, pub)) { res.success=false; return true; }
@@ -623,7 +610,7 @@ bool HandManager::move_hand_relative_handler(hand_planner::PickAndMove::Request 
         VectorXd q_send = q_abs;
         q_send.head(4) = q_abs.head(4) - q_right_baseline_.head(4);
         VectorXd ql = VectorXd::Zero(7);
-        publishMotorData(q_send, ql, Vector3d(0,0,0));
+        sendHandMotorCommands(q_send, ql, Vector3d(0,0,0));
     };
 
     if (!approachViaOneMid(hand_func_R, coef_generator, q, mid, goal, R_pick, 3.0, 3.0, T, pub)) {
@@ -686,7 +673,7 @@ void HandManager::hand_keyboard_callback(const std_msgs::Int32::ConstPtr& msg)
 
     auto pub = [&](const Eigen::VectorXd& qr){
         Eigen::VectorXd ql = Eigen::VectorXd::Zero(7);
-        publishMotorData(qr, ql, Eigen::Vector3d(0,0,0));
+        sendHandMotorCommands(qr, ql, Eigen::Vector3d(0,0,0));
     };
 
     if (!moveRelative(hand_func_R, coef_generator, q,
@@ -715,7 +702,7 @@ bool HandManager::move_hand_keyboard_handler(hand_planner::KeyboardJog::Request 
 
     auto pub = [&](const Eigen::VectorXd& qr){
         Eigen::VectorXd ql = Eigen::VectorXd::Zero(7);
-        publishMotorData(qr, ql, Eigen::Vector3d(0,0,0));
+        sendHandMotorCommands(qr, ql, Eigen::Vector3d(0,0,0));
     };
 
     if (!approachViaOneMid(hand_func_R, coef_generator, q, mid, goal, Rg, 3.0, 3.0, T, pub)) {
@@ -755,7 +742,7 @@ bool HandManager::move_hand_general_handler(hand_planner::MoveHandGeneral::Reque
         VectorXd q_send = q_abs;
         q_send.head(4) = q_abs.head(4) - q_right_baseline_.head(4);
         VectorXd ql = VectorXd::Zero(7);
-        publishMotorData(q_send, ql, Vector3d(0,0,0));
+        sendHandMotorCommands(q_send, ql, Vector3d(0,0,0));
     };
 
     const double T1 = 3.0, T2 = 3.0;
@@ -845,133 +832,133 @@ bool HandManager::move_hand_general_handler(hand_planner::MoveHandGeneral::Reque
 }
 
 bool HandManager::arm_back_to_home_handler(hand_planner::arm_back_to_home::Request &req, hand_planner::arm_back_to_home::Response &res) {
-    ROS_INFO("Executing sequential home service for first 5 arm joints of both arms. Head motors will not be controlled by this service.");
-    ros::Rate rate_(rate);
+    // ROS_INFO("Executing sequential home service for first 5 arm joints of both arms. Head motors will not be controlled by this service.");
+    // ros::Rate rate_(rate);
 
-    VectorXd q_home_r(7);
-    VectorXd q_home_l(7);
-    q_home_r.setZero();
-    q_home_l.setZero();
+    // VectorXd q_home_r(7);
+    // VectorXd q_home_l(7);
+    // q_home_r.setZero();
+    // q_home_l.setZero();
 
-    const int NUM_ARM_JOINTS_TO_HOME = 5; 
-    const double FIXED_HOME_DURATION = 20.0; 
-    double segment_duration = FIXED_HOME_DURATION / NUM_ARM_JOINTS_TO_HOME; 
-    if (segment_duration <= 0.0) segment_duration = T; 
-    int M_segment = static_cast<int>(segment_duration / T);
-    if (M_segment == 0) M_segment = 1;
+    // const int NUM_ARM_JOINTS_TO_HOME = 5; 
+    // const double FIXED_HOME_DURATION = 20.0; 
+    // double segment_duration = FIXED_HOME_DURATION / NUM_ARM_JOINTS_TO_HOME; 
+    // if (segment_duration <= 0.0) segment_duration = T; 
+    // int M_segment = static_cast<int>(segment_duration / T);
+    // if (M_segment == 0) M_segment = 1;
 
-    std::vector<double> q_motor(29, 0.0);   
-    std::vector<double> q_gazebo(29, 0.0); 
-    std::vector<double> current_position(29, 0.0); 
-    VectorXd q_current_r_abs(7);
-    VectorXd q_current_l_abs(7);
+    // std::vector<double> q_motor(29, 0.0);   
+    // std::vector<double> q_gazebo(29, 0.0); 
+    // std::vector<double> current_position(29, 0.0); 
+    // VectorXd q_current_r_abs(7);
+    // VectorXd q_current_l_abs(7);
 
-    if (simulation){
-        current_position = last_q_gazebo;
-    } else {
-        current_position = last_q_motor;
-    }
+    // if (simulation){
+    //     current_position = last_q_gazebo;
+    // } else {
+    //     current_position = last_q_motor;
+    // }
 
-    q_current_r_abs(0) = current_position [12];
-    q_current_r_abs(1) = current_position [13];
-    q_current_r_abs(2) = current_position [14];
-    q_current_r_abs(3) = current_position [15];
-    q_current_r_abs(4) = current_position [23];
-    q_current_r_abs(5) = current_position [24]; 
-    q_current_r_abs(6) = current_position [25]; 
+    // q_current_r_abs(0) = current_position [12];
+    // q_current_r_abs(1) = current_position [13];
+    // q_current_r_abs(2) = current_position [14];
+    // q_current_r_abs(3) = current_position [15];
+    // q_current_r_abs(4) = current_position [23];
+    // q_current_r_abs(5) = current_position [24]; 
+    // q_current_r_abs(6) = current_position [25]; 
 
-    // ROS_INFO("Current right arm positions_QrARR: [%f, %f, %f, %f, %f]", current_position[12], current_position[13], current_position[14], current_position[15], current_position[23]);
-    q_current_l_abs(0) = current_position [16];
-    q_current_l_abs(1) = current_position [17];
-    q_current_l_abs(2) = current_position [18];
-    q_current_l_abs(3) = current_position [19];
-    q_current_l_abs(4) = current_position [26];
-    q_current_l_abs(5) = current_position [27];
-    q_current_l_abs(6) = current_position [28];
+    // // ROS_INFO("Current right arm positions_QrARR: [%f, %f, %f, %f, %f]", current_position[12], current_position[13], current_position[14], current_position[15], current_position[23]);
+    // q_current_l_abs(0) = current_position [16];
+    // q_current_l_abs(1) = current_position [17];
+    // q_current_l_abs(2) = current_position [18];
+    // q_current_l_abs(3) = current_position [19];
+    // q_current_l_abs(4) = current_position [26];
+    // q_current_l_abs(5) = current_position [27];
+    // q_current_l_abs(6) = current_position [28];
 
-    VectorXd q_interp_r_abs = q_current_r_abs;
-    VectorXd q_interp_l_abs = q_current_l_abs;
+    // VectorXd q_interp_r_abs = q_current_r_abs;
+    // VectorXd q_interp_l_abs = q_current_l_abs;
     
-    std::vector<bool> joint_homed_r(NUM_ARM_JOINTS_TO_HOME, false);
-    std::vector<bool> joint_homed_l(NUM_ARM_JOINTS_TO_HOME, false);
+    // std::vector<bool> joint_homed_r(NUM_ARM_JOINTS_TO_HOME, false);
+    // std::vector<bool> joint_homed_l(NUM_ARM_JOINTS_TO_HOME, false);
 
-    for (int joint_idx = NUM_ARM_JOINTS_TO_HOME - 1; joint_idx >= 0; --joint_idx) {
-        ROS_INFO("Homing arm joint %d (index %d) of both arms.", joint_idx + 1, joint_idx);
+    // for (int joint_idx = NUM_ARM_JOINTS_TO_HOME - 1; joint_idx >= 0; --joint_idx) {
+    //     ROS_INFO("Homing arm joint %d (index %d) of both arms.", joint_idx + 1, joint_idx);
 
-        double start_r_joint_val = q_interp_r_abs(joint_idx);
-        double target_r_joint_val = q_home_r(joint_idx);
-        double start_l_joint_val = q_interp_l_abs(joint_idx);
-        double target_l_joint_val = q_home_l(joint_idx);
+    //     double start_r_joint_val = q_interp_r_abs(joint_idx);
+    //     double target_r_joint_val = q_home_r(joint_idx);
+    //     double start_l_joint_val = q_interp_l_abs(joint_idx);
+    //     double target_l_joint_val = q_home_l(joint_idx);
 
-        ROS_INFO("Right joint %d: start=%.4f, target=%.4f", joint_idx, start_r_joint_val, target_r_joint_val);
-        ROS_INFO("Left joint %d: start=%.4f, target=%.4f", joint_idx, start_l_joint_val, target_l_joint_val);
+    //     ROS_INFO("Right joint %d: start=%.4f, target=%.4f", joint_idx, start_r_joint_val, target_r_joint_val);
+    //     ROS_INFO("Left joint %d: start=%.4f, target=%.4f", joint_idx, start_l_joint_val, target_l_joint_val);
 
-        for (int step = 0; step <= M_segment; ++step) {
-            double alpha = (M_segment > 0) ? static_cast<double>(step) / M_segment : 1.0;
+    //     for (int step = 0; step <= M_segment; ++step) {
+    //         double alpha = (M_segment > 0) ? static_cast<double>(step) / M_segment : 1.0;
 
-            q_interp_r_abs(joint_idx) = start_r_joint_val + (target_r_joint_val - start_r_joint_val) * alpha;
-            q_interp_l_abs(joint_idx) = start_l_joint_val + (target_l_joint_val - start_l_joint_val) * alpha;
+    //         q_interp_r_abs(joint_idx) = start_r_joint_val + (target_r_joint_val - start_r_joint_val) * alpha;
+    //         q_interp_l_abs(joint_idx) = start_l_joint_val + (target_l_joint_val - start_l_joint_val) * alpha;
 
-            if (!simulation) {
-                q_motor[12] = q_interp_r_abs(0);
-                q_motor[13] = q_interp_r_abs(1);
-                q_motor[14] = q_interp_r_abs(2);
-                q_motor[15] = q_interp_r_abs(3);
-                q_motor[23] = q_interp_r_abs(4);
-                q_motor[24] = q_interp_r_abs(5);
-                q_motor[25] = q_interp_r_abs(6);
+    //         if (!simulation) {
+    //             q_motor[12] = q_interp_r_abs(0);
+    //             q_motor[13] = q_interp_r_abs(1);
+    //             q_motor[14] = q_interp_r_abs(2);
+    //             q_motor[15] = q_interp_r_abs(3);
+    //             q_motor[23] = q_interp_r_abs(4);
+    //             q_motor[24] = q_interp_r_abs(5);
+    //             q_motor[25] = q_interp_r_abs(6);
 
-                q_motor[16] = q_interp_l_abs(0);
-                q_motor[17] = q_interp_l_abs(1);
-                q_motor[18] = q_interp_l_abs(2);
-                q_motor[19] = q_interp_l_abs(3);
-                q_motor[26] = q_interp_l_abs(4);
-                q_motor[27] = q_interp_l_abs(5);
-                q_motor[28] = q_interp_l_abs(6);
+    //             q_motor[16] = q_interp_l_abs(0);
+    //             q_motor[17] = q_interp_l_abs(1);
+    //             q_motor[18] = q_interp_l_abs(2);
+    //             q_motor[19] = q_interp_l_abs(3);
+    //             q_motor[26] = q_interp_l_abs(4);
+    //             q_motor[27] = q_interp_l_abs(5);
+    //             q_motor[28] = q_interp_l_abs(6);
                 
-                std_msgs::Int32MultiArray trajectory_data;
-                for(int i = 0; i < 29; i++) { 
-                    trajectory_data.data.push_back(q_motor[i]); 
-                }
-                trajectory_data_pub.publish(trajectory_data);
-            } else { 
-                q_gazebo[12] = q_interp_r_abs(0);  
-                q_gazebo[13] = q_interp_r_abs(1);   
-                q_gazebo[14] = q_interp_r_abs(2);  
-                q_gazebo[15] = q_interp_r_abs(3);
-                q_gazebo[23] = q_interp_r_abs(4);   
-                q_gazebo[24] = q_interp_r_abs(5);  
-                q_gazebo[25] = q_interp_r_abs(6);
+    //             std_msgs::Int32MultiArray trajectory_data;
+    //             for(int i = 0; i < 29; i++) { 
+    //                 trajectory_data.data.push_back(q_motor[i]); 
+    //             }
+    //             trajectory_data_pub.publish(trajectory_data);
+    //         } else { 
+    //             q_gazebo[12] = q_interp_r_abs(0);  
+    //             q_gazebo[13] = q_interp_r_abs(1);   
+    //             q_gazebo[14] = q_interp_r_abs(2);  
+    //             q_gazebo[15] = q_interp_r_abs(3);
+    //             q_gazebo[23] = q_interp_r_abs(4);   
+    //             q_gazebo[24] = q_interp_r_abs(5);  
+    //             q_gazebo[25] = q_interp_r_abs(6);
                 
-                q_gazebo[16] = q_interp_l_abs(0);  
-                q_gazebo[17] = q_interp_l_abs(1);   
-                q_gazebo[18] = q_interp_l_abs(2);  
-                q_gazebo[19] = q_interp_l_abs(3);
-                q_gazebo[26] = q_interp_l_abs(4);   
-                q_gazebo[27] = q_interp_l_abs(5);  
-                q_gazebo[28] = q_interp_l_abs(6); 
+    //             q_gazebo[16] = q_interp_l_abs(0);  
+    //             q_gazebo[17] = q_interp_l_abs(1);   
+    //             q_gazebo[18] = q_interp_l_abs(2);  
+    //             q_gazebo[19] = q_interp_l_abs(3);
+    //             q_gazebo[26] = q_interp_l_abs(4);   
+    //             q_gazebo[27] = q_interp_l_abs(5);  
+    //             q_gazebo[28] = q_interp_l_abs(6); 
 
-                joint_angles_gazebo_.data.clear();
-                for (int i = 0; i < 29; i++) {
-                    joint_angles_gazebo_.data.push_back(q_gazebo[i]);
-                }
-                gazeboJointStatePub_.publish(joint_angles_gazebo_);
-            }
+    //             joint_angles_gazebo_.data.clear();
+    //             for (int i = 0; i < 29; i++) {
+    //                 joint_angles_gazebo_.data.push_back(q_gazebo[i]);
+    //             }
+    //             gazeboJointStatePub_.publish(joint_angles_gazebo_);
+    //         }
             
-            ros::spinOnce();
-            rate_.sleep();
-        } 
+    //         ros::spinOnce();
+    //         rate_.sleep();
+    //     } 
         
-        joint_homed_r[joint_idx] = true;
-        joint_homed_l[joint_idx] = true;
+    //     joint_homed_r[joint_idx] = true;
+    //     joint_homed_l[joint_idx] = true;
         
-        q_current_r_abs(joint_idx) = 0.0;
-        q_current_l_abs(joint_idx) = 0.0;
+    //     q_current_r_abs(joint_idx) = 0.0;
+    //     q_current_l_abs(joint_idx) = 0.0;
         
-    } 
+    // } 
 
-    ROS_INFO("Go Arm Home service finished. First 5 arm joints are now at home position. Head motors were not controlled.");
-    res.success = true;
+    // ROS_INFO("Go Arm Home service finished. First 5 arm joints are now at home position. Head motors were not controlled.");
+    // res.success = true;
     return true;
 }
 

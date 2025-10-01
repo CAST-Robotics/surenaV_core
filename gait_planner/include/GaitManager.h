@@ -35,8 +35,11 @@ class GaitManager
 public:
     GaitManager(ros::NodeHandle *n);
 
+    const double* getGaitMotorCommands() const; 
+    const double* getGaitGazeboCommands() const; 
+
     // Lower Body
-    bool sendCommand();
+    void sendGaitMotorCommands();
     bool setPos(int jointID, int dest);
     bool home(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
     void qcInitial(const sensor_msgs::JointState &msg);
@@ -74,7 +77,6 @@ public:
 private:
     Robot *robot;
     // Lower Body
-    ros::Publisher motorDataPub_;
     ros::Subscriber incSub_;
     ros::Subscriber offsetSub_;
     ros::Subscriber absSub_;
@@ -95,7 +97,6 @@ private:
     bool isKeyboardTrajectoryEnabled;
     bool qcInitialBool_;
     int homeOffset_[32];
-    std_msgs::Int32MultiArray motorCommand_;
     double motorCommandArray_[29];
     int harmonicRatio_[12];
     float absData_[32];
@@ -108,6 +109,8 @@ private:
     int motorDir_[12];
     bool collision_;
     int bumpOrder_[8];
+    double gait_gazebo_commands[12] = {0.0};
+    mutable std::mutex command_mutex_;
 
     // Ankle Mechanism Parameters
 

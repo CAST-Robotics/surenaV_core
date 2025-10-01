@@ -16,15 +16,24 @@
 class RobotManager {
 public:
     RobotManager(ros::NodeHandle *n);
+    void publishCombinedMotorCommands();
 
 private:
     // --- ROS Communication ---
     ros::NodeHandle* nh_;
     ros::ServiceServer execute_scenario_service_;
 
+    ros::Publisher combined_motor_pub_;     
+    ros::Publisher combined_gazebo_pub_; 
+    ros::Timer publish_timer_; 
+
     // --- Pointers to Specialized Managers ---
     std::unique_ptr<HandManager> hand_manager_;
     std::unique_ptr<GaitManager> gait_manager_;
+
+    // message objects 
+    std_msgs::Int32MultiArray combined_motor_command_msg_;
+    std_msgs::Float64MultiArray combined_gazebo_command_msg_;
 
     // --- Member to hold the parsed scenario data ---
     YAML::Node scenarios_config_;
@@ -35,6 +44,7 @@ private:
     // --- Helper Function ---
     void load_scenarios_from_file();
     bool execute_step(const YAML::Node& step);
+    void publishTimerCallback(const ros::TimerEvent&);
 };
 
 #endif // ROBOT_MANAGER_H

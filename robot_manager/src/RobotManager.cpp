@@ -2,14 +2,17 @@
 
 // --- CONSTRUCTOR ---
 RobotManager::RobotManager(ros::NodeHandle *n) : nh_(n) {
-    // Instantiate the managers, passing the node handle so they can create their own services/pubs/subs
-    hand_manager_ = std::make_unique<HandManager>(n);
-    gait_manager_ = std::make_unique<GaitManager>(n);
+
+    hand_manager_ = std::make_unique<HandManager>(nh_);
+    gait_manager_ = std::make_unique<GaitManager>(nh_);
 
     load_scenarios_from_file();
 
     // ROS Communication Setup
     execute_scenario_service_ = nh_->advertiseService("execute_scenario_srv", &RobotManager::execute_scenario_callback, this);
+    combined_motor_pub_ = nh_->advertise<std_msgs::Int32MultiArray>("jointdata/qc", 100);
+    combined_gazebo_pub_ = nh_->advertise<std_msgs::Float64MultiArray>("/joint_angles_gazebo", 100);
+    publish_timer_ = nh_->createTimer(ros::Duration(0.005), &RobotManager::publishTimerCallback, this); 
 }
 
 // --- YAML FILE LOADER ---
@@ -163,6 +166,60 @@ bool RobotManager::execute_step(const YAML::Node& step) {
         ROS_ERROR("Scenario step contains unknown service: %s", service_name.c_str());
         return false;
     }
+}
+
+void RobotManager::publishCombinedMotorCommands() {
+    // Get commands from GaitManager (lower body)
+    const double* gait_motor_commands = gait_manager_->getGaitMotorCommands();
+    const double* gait_gazebo_commands = gait_manager_->getGaitGazeboCommands();
+
+    // Get commands from HandManager (upper body and head)
+    const std::vector<double>& hand_motor_commands = hand_manager_->getHandMotorCommands();
+    const std::vector<double>& hand_gazebo_commands = hand_manager_->getHandGazeboCommands();
+
+    if (!hand_manager_->getSimulationMode()) { 
+        combined_motor_command_msg_.data.clear();
+        combined_motor_command_msg_.data.reserve(29);
+
+        for (int i = 0; i < 12; ++i) {
+            combined_motor_command_msg_.data.push_back(gait_motor_commands[i]);
+        }
+        for (int i = 12; i < 29; ++i) {
+            combined_motor_command_msg_.data.push_back(hand_motor_commands[i]);
+        }
+        combined_motor_pub_.publish(combined_motor_command_msg_);
+
+        for (size_t i = 0; i < combined_motor_command_msg_.data.size(); ++i) {
+            std::cout << combined_motor_command_msg_.data[i];
+            if (i < combined_motor_command_msg_.data.size() - 1) std::cout << ", ";
+        }
+        std::cout << std::endl;
+
+    } else { // Gazebo Simulation (radians)
+        combined_gazebo_command_msg_.data.clear();
+        combined_gazebo_command_msg_.data.reserve(29);
+
+        // Copy lower body commands from GaitManager (0-11)
+        for (int i = 0; i < 12; ++i) {
+            combined_gazebo_command_msg_.data.push_back(gait_gazebo_commands[i]);
+        }
+        // Copy upper body commands (including head and wrists) from HandManager (12-28)
+
+        for (int i = 12; i < 29; ++i) {
+            combined_gazebo_command_msg_.data.push_back(hand_gazebo_commands[i]);
+        }
+        combined_gazebo_pub_.publish(combined_gazebo_command_msg_);
+        
+        for (size_t i = 0; i < combined_gazebo_command_msg_.data.size(); ++i) {
+            std::cout << combined_gazebo_command_msg_.data[i];
+            if (i < combined_gazebo_command_msg_.data.size() - 1) std::cout << ", ";
+        }
+        std::cout << std::endl;
+    }
+}
+
+void RobotManager::publishTimerCallback(const ros::TimerEvent&) {
+    publishCombinedMotorCommands();
 }
 
 // --- Main Function ---

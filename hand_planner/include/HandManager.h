@@ -44,9 +44,11 @@ class HandManager {
 public:
     HandManager(ros::NodeHandle *n);
 
+    const std::vector<double>& getHandMotorCommands() const;
+    const std::vector<double>& getHandGazeboCommands() const;
+    bool getSimulationMode() const { return simulation; }
+
 private:
-    ros::Publisher trajectory_data_pub;
-    ros::Publisher gazeboJointStatePub_;
     ros::Subscriber camera_data_sub;
     ros::Subscriber joint_qc_sub;
     ros::Subscriber teleoperation_data_sub;
@@ -84,12 +86,14 @@ private:
     VectorXd next_ini_ee_posL;
     vector<double> last_q_gazebo;
     vector<double> last_q_motor;
+    vector<double> hand_motor_commands_ = std::vector<double>(29, 0);
+    vector<double> hand_gazebo_commands_ = std::vector<double>(29, 0.0);
+    mutable std::mutex command_mutex_;
 
     
     double sum_r;
     double sum_l;
     int QcArr[29];
-    std_msgs::Float64MultiArray joint_angles_gazebo_;
     VectorXd q_rad_teleop;
 
     Eigen::VectorXd q_right_state_;
@@ -122,7 +126,7 @@ private:
     void teleoperation_callback(const std_msgs::Float64MultiArray &q_deg_teleop);
     void micArray_callback(const std_msgs::Float64 &msg);
     void hand_keyboard_callback(const std_msgs::Int32::ConstPtr& msg);
-    void publishMotorData(const VectorXd& q_rad_right, const VectorXd& q_rad_left, const Vector3d& head_angles);
+    void sendHandMotorCommands(const VectorXd& q_rad_right, const VectorXd& q_rad_left, const Vector3d& head_angles);
 
     MatrixXd scenario_target(HandType type, string scenario, int i, VectorXd ee_pos, string ee_ini_pos);
     VectorXd reach_target(S5_hand& hand_model, VectorXd& q_arm, MatrixXd& qref_arm, double& sum_arm, VectorXd& q_init_arm, MatrixXd targets, string scenario, int M);

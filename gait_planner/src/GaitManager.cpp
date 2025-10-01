@@ -5,7 +5,7 @@ GaitManager::GaitManager(ros::NodeHandle *n)
     string config_path = ros::package::getPath("gait_planner") + "/config/surenav_config.json";
     robot = new Robot(n, config_path);
 
-    motorDataPub_ = n->advertise<std_msgs::Int32MultiArray>("jointdata/qc", 100);
+    // motorDataPub_ = n->advertise<std_msgs::Int32MultiArray>("jointdata/qc", 100);
     absSub_ = n->subscribe("/surena/abs_joint_state", 100, &GaitManager::absReader, this);
     offsetSub_ = n->subscribe("/surena/inc_joint_state", 100, &GaitManager::qcInitial, this);
     incSub_ = n->subscribe("/surena/inc_joint_state", 100, &GaitManager::incReader, this);
@@ -118,15 +118,8 @@ GaitManager::GaitManager(ros::NodeHandle *n)
     }
 }
 
-bool GaitManager::sendCommand()
-{
-    motorCommand_.data.clear();
-    for (int i = 0; i < 29; i++) {
-        motorCommand_.data.push_back(motorCommandArray_[i]);
-        // cout << motorCommandArray_[i] << ","; 
-    }
-    // cout << endl;
-    motorDataPub_.publish(motorCommand_);
+void GaitManager::sendGaitMotorCommands() {
+    std::lock_guard<std::mutex> lock(command_mutex_); // Acquire lock
 }
 
 bool GaitManager::setPos(int jointID, int dest)
@@ -148,8 +141,7 @@ bool GaitManager::setPos(int jointID, int dest)
                 motorCommandArray_[temp_roll] += abs2incDir_[jointID] * (4096 * 4 * 0.01);
             }
         }
-        sendCommand();
-        ros::spinOnce();
+        sendGaitMotorCommands();
         rate_.sleep();
     }
     return true;
@@ -181,6 +173,16 @@ bool GaitManager::home(std_srvs::Empty::Request &req, std_srvs::Empty::Response 
         commandConfig_[2][i] = 0.0;
     }
     return true;
+}
+
+const double* GaitManager::getGaitMotorCommands() const {
+    std::lock_guard<std::mutex> lock(command_mutex_);
+    return motorCommandArray_;
+}
+
+const double* GaitManager::getGaitGazeboCommands() const {
+    std::lock_guard<std::mutex> lock(command_mutex_);
+    return gait_gazebo_commands;
 }
 
 void GaitManager::qcInitial(const sensor_msgs::JointState &msg)
@@ -318,10 +320,10 @@ bool GaitManager::emptyCommand()
         motorCommandArray_[i] = incData_[i];
 
     motorCommandArray_[0] += 1;
-    sendCommand();
+    sendGaitMotorCommands();
     rate_.sleep();
     motorCommandArray_[0] -= 1;
-    sendCommand();
+    sendGaitMotorCommands();
     rate_.sleep();
     return true;
 }
@@ -355,8 +357,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
         {
             motorCommandArray_[4] += outer_delta_inc / 100;
             motorCommandArray_[5] += inner_delta_inc / 100;
-            sendCommand();
-            ros::spinOnce();
+            sendGaitMotorCommands();
             rate_.sleep();
         }
     }
@@ -383,8 +384,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
         {
             motorCommandArray_[4] += outer_delta_inc / 100;
             motorCommandArray_[5] += inner_delta_inc / 100;
-            sendCommand();
-            ros::spinOnce();
+            sendGaitMotorCommands();
             rate_.sleep();
         }
     }
@@ -411,8 +411,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
         {
             motorCommandArray_[10] += outer_delta_inc / 100;
             motorCommandArray_[11] += inner_delta_inc / 100;
-            sendCommand();
-            ros::spinOnce();
+            sendGaitMotorCommands();
             rate_.sleep();
         }
     }
@@ -439,8 +438,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
         {
             motorCommandArray_[10] += outer_delta_inc / 100;
             motorCommandArray_[11] += inner_delta_inc / 100;
-            sendCommand();
-            ros::spinOnce();
+            sendGaitMotorCommands();
             rate_.sleep();
         }
     }
@@ -453,8 +451,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
         for (int i = 0; i < 100; i++)
         {
             motorCommandArray_[0] += yaw_inc / 100;
-            sendCommand();
-            ros::spinOnce();
+            sendGaitMotorCommands();
             rate_.sleep();
         }
     }
@@ -466,16 +463,14 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
         for (int i = 0; i < 100; i++)
         {
             motorCommandArray_[6] += yaw_inc / 100;
-            sendCommand();
-            ros::spinOnce();
+            sendGaitMotorCommands();
             rate_.sleep();
         }
     }
     else if (req.motor_id >= 20 && req.motor_id < 26)
     {
         motorCommandArray_[req.motor_id] = req.angle;
-        sendCommand();
-        ros::spinOnce();
+        sendGaitMotorCommands();
         rate_.sleep();
         res.result = true; 
         return true;    
@@ -486,8 +481,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
         for (int i = 0; i < int(abs(inc)) / 100; i++)
         {
             motorCommandArray_[req.motor_id] += sgn(inc) * 100;
-            sendCommand();
-            ros::spinOnce();
+            sendGaitMotorCommands();
             rate_.sleep();
             res.result = true; 
             return true;    
@@ -567,8 +561,7 @@ bool GaitManager::ankleHome(bool is_left, int roll_dest, int pitch_dest)
                 motorCommandArray_[inner] += (4096 * 4 * 0.01);
             }
         }
-        sendCommand();
-        ros::spinOnce();
+        sendGaitMotorCommands();
         rate_.sleep();
     }
     while (abs(abs(absData_[outer]) - pitch_dest) > 100)
@@ -588,8 +581,7 @@ bool GaitManager::ankleHome(bool is_left, int roll_dest, int pitch_dest)
                 motorCommandArray_[inner] -= (4096 * 4 * 0.01);
             }
         }
-        sendCommand();
-        ros::spinOnce();
+        sendGaitMotorCommands();
         rate_.sleep();
     }
 }
@@ -726,8 +718,7 @@ bool GaitManager::walk(gait_planner::Trajectory::Request &req,
             return false;
         }
         computeLowerLimbJointMotion(jnt_command, iter);
-        sendCommand();
-        ros::spinOnce();
+        sendGaitMotorCommands();
         rate_.sleep();
         iter++;
     }
@@ -830,12 +821,17 @@ bool GaitManager::computeLowerLimbJointMotion(double jnt_command[], int iter)
             }
 
             // commandConfig_[2][j] = absDir_[j] * abs2rad(absData_[j] - homeAbs_[j]);
+            gait_gazebo_commands[j] = jnt_command[j];
         }
         else
         {
             cout << "joint " << j << " out of workspace in iteration " << iter << ", angle difference: " << dif << endl;
             return false;
         }
+    }
+    for (int i = 12; i < 29; ++i) {
+        motorCommandArray_[i] = 0; 
+        gait_gazebo_commands[i] = 0.0; 
     }
 }
 
@@ -1105,7 +1101,7 @@ bool GaitManager::keyboardWalk(std_srvs::Empty::Request &req, std_srvs::Empty::R
             motorCommandArray_[23] = 90;
 
             computeLowerLimbJointMotion(jnt_command, iter);
-            sendCommand();
+            sendGaitMotorCommands();
             iter++;
         }
         // if (iter == trajSize_ - 1)

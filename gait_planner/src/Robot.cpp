@@ -134,7 +134,7 @@ void Robot::spinOnline(double config[], double jnt_vel[], Vector3d torque_r, Vec
         if (robot_cs == WALK)
         {
             bumpSensorCalibrated_ = true;
-            runFootLenController(f_l, f_r, robot_cs);
+            //runFootLenController(f_l, f_r, robot_cs);
 
             runBumpFootOrientController(bump_r, bump_l);
 
