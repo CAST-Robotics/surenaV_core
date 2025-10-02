@@ -50,8 +50,7 @@ HandManager::HandManager(ros::NodeHandle *n) :
     
 
     // ROS Communication Setup
-    // trajectory_data_pub = n->advertise<std_msgs::Int32MultiArray>("jointdata/qc", 100);
-    // gazeboJointStatePub_ = n->advertise<std_msgs::Float64MultiArray>("/joint_angles_gazebo", 100);
+    publish_trigger_pub_ = n->advertise<std_msgs::Empty>("robot_manager/publish_trigger", 1);
     camera_data_sub = n->subscribe("/detection_info", 1, &HandManager::object_detect_callback, this);
     joint_qc_sub = n->subscribe("jointdata/qc", 100, &HandManager::joint_qc_callback, this);
     teleoperation_data_sub = n->subscribe("teleoperation/angles", 100, &HandManager::teleoperation_callback, this);
@@ -385,6 +384,7 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             Eigen::VectorXd q_left = Eigen::VectorXd::Zero(7);
             Eigen::Vector3d head_angles(0,0,0);
             sendHandMotorCommands(q_send, q_left, head_angles);
+            this->publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
         }
 
@@ -408,6 +408,7 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             Eigen::VectorXd q_rad_left  = qref_l.col(id);
             Eigen::Vector3d head_angles(0, 0, 0);
             sendHandMotorCommands(q_rad_right, q_rad_left, head_angles);
+            this->publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
         }
 
@@ -443,6 +444,7 @@ bool HandManager::both_hands(hand_planner::move_hand_both::Request &req, hand_pl
         VectorXd q_rad_l = qref_l.col(id);
         Vector3d head_angles(0, 0, 0);
         sendHandMotorCommands(q_rad_r, q_rad_l, head_angles);
+        this->publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
     }
 
@@ -505,6 +507,7 @@ bool HandManager::grip_online(hand_planner::gripOnline::Request &req, hand_plann
         VectorXd q_rad_left = VectorXd::Zero(7);
         Vector3d head_angles(h_roll, h_pitch, h_yaw);
         sendHandMotorCommands(q_delta, q_rad_left, head_angles);
+        this->publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
         t_grip += T;
     }
@@ -543,6 +546,7 @@ bool HandManager::head_track_handler(hand_planner::head_track::Request &req, han
         VectorXd q_rad_left = VectorXd::Zero(7);
         Vector3d head_angles(h_roll, h_pitch, h_yaw);
         sendHandMotorCommands(q_rad_right, q_rad_left, head_angles);
+        this->publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
     }
     ROS_INFO("Head tracking finished.");
@@ -558,6 +562,7 @@ bool HandManager::teleoperation_handler(std_srvs::Empty::Request &req, std_srvs:
         VectorXd q_rad_left = q_rad_teleop.segment(7, 7);
         Vector3d head_angles(0, 0, 0);
         sendHandMotorCommands(q_rad_right, q_rad_left, head_angles);
+        this->publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
     }
     return true;
@@ -582,6 +587,7 @@ bool HandManager::write_string_handler(hand_planner::WriteString::Request &req,
         q_send.head(4) = q_abs.head(4) - q_right_baseline_.head(4);
         VectorXd ql = VectorXd::Zero(7);
         sendHandMotorCommands(q_send, ql, Vector3d(0,0,0));
+        this->publish_trigger_pub_.publish(std_msgs::Empty());
     };
 
     if (!approachWhiteboard(hand_func_R, coef_generator, q, r_target, R_target, T, pub)) { res.success=false; return true; }
@@ -611,6 +617,7 @@ bool HandManager::move_hand_relative_handler(hand_planner::PickAndMove::Request 
         q_send.head(4) = q_abs.head(4) - q_right_baseline_.head(4);
         VectorXd ql = VectorXd::Zero(7);
         sendHandMotorCommands(q_send, ql, Vector3d(0,0,0));
+        this->publish_trigger_pub_.publish(std_msgs::Empty());
     };
 
     if (!approachViaOneMid(hand_func_R, coef_generator, q, mid, goal, R_pick, 3.0, 3.0, T, pub)) {
@@ -674,6 +681,7 @@ void HandManager::hand_keyboard_callback(const std_msgs::Int32::ConstPtr& msg)
     auto pub = [&](const Eigen::VectorXd& qr){
         Eigen::VectorXd ql = Eigen::VectorXd::Zero(7);
         sendHandMotorCommands(qr, ql, Eigen::Vector3d(0,0,0));
+        this->publish_trigger_pub_.publish(std_msgs::Empty());
     };
 
     if (!moveRelative(hand_func_R, coef_generator, q,
@@ -703,6 +711,7 @@ bool HandManager::move_hand_keyboard_handler(hand_planner::KeyboardJog::Request 
     auto pub = [&](const Eigen::VectorXd& qr){
         Eigen::VectorXd ql = Eigen::VectorXd::Zero(7);
         sendHandMotorCommands(qr, ql, Eigen::Vector3d(0,0,0));
+        this->publish_trigger_pub_.publish(std_msgs::Empty());
     };
 
     if (!approachViaOneMid(hand_func_R, coef_generator, q, mid, goal, Rg, 3.0, 3.0, T, pub)) {
@@ -743,6 +752,7 @@ bool HandManager::move_hand_general_handler(hand_planner::MoveHandGeneral::Reque
         q_send.head(4) = q_abs.head(4) - q_right_baseline_.head(4);
         VectorXd ql = VectorXd::Zero(7);
         sendHandMotorCommands(q_send, ql, Vector3d(0,0,0));
+        this->publish_trigger_pub_.publish(std_msgs::Empty());
     };
 
     const double T1 = 3.0, T2 = 3.0;

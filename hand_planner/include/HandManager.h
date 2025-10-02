@@ -20,6 +20,7 @@
 
 // msgs & srvs
 #include <std_srvs/Empty.h>
+#include <std_msgs/Empty.h>
 #include <std_msgs/Int32.h>
 #include <std_msgs/Int32MultiArray.h>
 #include <std_msgs/Float64MultiArray.h>
@@ -66,6 +67,7 @@ private:
     ros::ServiceServer move_hand_general_service_;
     ros::ServiceServer arm_back_to_home_service_;
     ros::Subscriber hand_keyboard_sub_;
+    ros::Publisher publish_trigger_pub_;
   
     ros::WallTime hand_keyboard_last_input_;
     double hand_step_T_ = 1.0;

@@ -5,6 +5,7 @@
 #include <memory>
 #include <yaml-cpp/yaml.h>
 #include "ros/callback_queue.h"
+#include <std_msgs/Empty.h> 
 
 // Include managers from library packages
 #include "HandManager.h"
@@ -16,16 +17,16 @@
 class RobotManager {
 public:
     RobotManager(ros::NodeHandle *n);
-    void publishCombinedMotorCommands();
 
 private:
     // --- ROS Communication ---
     ros::NodeHandle* nh_;
     ros::ServiceServer execute_scenario_service_;
+    ros::Subscriber publish_trigger_sub_;
 
     ros::Publisher combined_motor_pub_;     
     ros::Publisher combined_gazebo_pub_; 
-    ros::Timer publish_timer_; 
+
 
     // --- Pointers to Specialized Managers ---
     std::unique_ptr<HandManager> hand_manager_;
@@ -44,7 +45,8 @@ private:
     // --- Helper Function ---
     void load_scenarios_from_file();
     bool execute_step(const YAML::Node& step);
-    void publishTimerCallback(const ros::TimerEvent&);
+    void publishTriggerCallback(const std_msgs::Empty::ConstPtr& msg);
+    void publishCombinedMotorCommands();
 };
 
 #endif // ROBOT_MANAGER_H

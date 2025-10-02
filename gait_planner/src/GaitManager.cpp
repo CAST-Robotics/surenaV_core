@@ -5,7 +5,6 @@ GaitManager::GaitManager(ros::NodeHandle *n)
     string config_path = ros::package::getPath("gait_planner") + "/config/surenav_config.json";
     robot = new Robot(n, config_path);
 
-    // motorDataPub_ = n->advertise<std_msgs::Int32MultiArray>("jointdata/qc", 100);
     absSub_ = n->subscribe("/surena/abs_joint_state", 100, &GaitManager::absReader, this);
     offsetSub_ = n->subscribe("/surena/inc_joint_state", 100, &GaitManager::qcInitial, this);
     incSub_ = n->subscribe("/surena/inc_joint_state", 100, &GaitManager::incReader, this);
@@ -22,6 +21,7 @@ GaitManager::GaitManager(ros::NodeHandle *n)
     GyroSub_ = n->subscribe("/imu/angular_velocity", 100, &GaitManager::GyroCallback, this);
     bumpSub_ = n->subscribe("/surena/bump_sensor_state", 100, &GaitManager::bumpCallback, this);
     keyboardCommandSub_ = n->subscribe("/keyboard_command", 1, &GaitManager::keyboardHandler, this);
+    publish_trigger_pub_ = n->advertise<std_msgs::Empty>("robot_manager/publish_trigger", 1);
 
     b = 0.049;
     c = 0.35;
@@ -142,6 +142,7 @@ bool GaitManager::setPos(int jointID, int dest)
             }
         }
         sendGaitMotorCommands();
+        this->publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
     }
     return true;
@@ -324,6 +325,7 @@ bool GaitManager::emptyCommand()
     rate_.sleep();
     motorCommandArray_[0] -= 1;
     sendGaitMotorCommands();
+    this->publish_trigger_pub_.publish(std_msgs::Empty());
     rate_.sleep();
     return true;
 }
@@ -358,6 +360,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
             motorCommandArray_[4] += outer_delta_inc / 100;
             motorCommandArray_[5] += inner_delta_inc / 100;
             sendGaitMotorCommands();
+            this->publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
         }
     }
@@ -385,6 +388,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
             motorCommandArray_[4] += outer_delta_inc / 100;
             motorCommandArray_[5] += inner_delta_inc / 100;
             sendGaitMotorCommands();
+            this->publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
         }
     }
@@ -412,6 +416,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
             motorCommandArray_[10] += outer_delta_inc / 100;
             motorCommandArray_[11] += inner_delta_inc / 100;
             sendGaitMotorCommands();
+            this->publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
         }
     }
@@ -439,6 +444,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
             motorCommandArray_[10] += outer_delta_inc / 100;
             motorCommandArray_[11] += inner_delta_inc / 100;
             sendGaitMotorCommands();
+            this->publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
         }
     }
@@ -452,6 +458,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
         {
             motorCommandArray_[0] += yaw_inc / 100;
             sendGaitMotorCommands();
+            this->publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
         }
     }
@@ -464,6 +471,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
         {
             motorCommandArray_[6] += yaw_inc / 100;
             sendGaitMotorCommands();
+            this->publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
         }
     }
@@ -471,6 +479,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
     {
         motorCommandArray_[req.motor_id] = req.angle;
         sendGaitMotorCommands();
+        this->publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
         res.result = true; 
         return true;    
@@ -482,6 +491,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
         {
             motorCommandArray_[req.motor_id] += sgn(inc) * 100;
             sendGaitMotorCommands();
+            this->publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
             res.result = true; 
             return true;    
@@ -562,6 +572,7 @@ bool GaitManager::ankleHome(bool is_left, int roll_dest, int pitch_dest)
             }
         }
         sendGaitMotorCommands();
+        this->publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
     }
     while (abs(abs(absData_[outer]) - pitch_dest) > 100)
@@ -582,6 +593,7 @@ bool GaitManager::ankleHome(bool is_left, int roll_dest, int pitch_dest)
             }
         }
         sendGaitMotorCommands();
+        this->publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
     }
 }
@@ -719,6 +731,7 @@ bool GaitManager::walk(gait_planner::Trajectory::Request &req,
         }
         computeLowerLimbJointMotion(jnt_command, iter);
         sendGaitMotorCommands();
+        this->publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
         iter++;
     }
@@ -886,7 +899,7 @@ void GaitManager::keyboardHandler(const std_msgs::Int32 &msg)
         switch (command)
         {
         case 119: // w: move forward 
-            step_count = 4;
+            step_count = 10;
             step_length = 0.16;
             theta = 0.0;
             robot->trajGen(step_count, t_step, alpha, t_double_support, COM_height, step_length, 
@@ -1097,6 +1110,7 @@ bool GaitManager::keyboardWalk(std_srvs::Empty::Request &req, std_srvs::Empty::R
 
             computeLowerLimbJointMotion(jnt_command, iter);
             sendGaitMotorCommands();
+            this->publish_trigger_pub_.publish(std_msgs::Empty());
             iter++;
         }
         // if (iter == trajSize_ - 1)

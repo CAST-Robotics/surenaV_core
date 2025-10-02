@@ -12,7 +12,7 @@ RobotManager::RobotManager(ros::NodeHandle *n) : nh_(n) {
     execute_scenario_service_ = nh_->advertiseService("execute_scenario_srv", &RobotManager::execute_scenario_callback, this);
     combined_motor_pub_ = nh_->advertise<std_msgs::Int32MultiArray>("jointdata/qc", 100);
     combined_gazebo_pub_ = nh_->advertise<std_msgs::Float64MultiArray>("/joint_angles_gazebo", 100);
-    publish_timer_ = nh_->createTimer(ros::Duration(0.005), &RobotManager::publishTimerCallback, this); 
+    publish_trigger_sub_ = nh_->subscribe("robot_manager/publish_trigger", 1, &RobotManager::publishTriggerCallback, this);
 }
 
 // --- YAML FILE LOADER ---
@@ -168,6 +168,11 @@ bool RobotManager::execute_step(const YAML::Node& step) {
     }
 }
 
+void RobotManager::publishTriggerCallback(const std_msgs::Empty::ConstPtr& msg) {
+    ROS_DEBUG("Received publish trigger. Publishing combined commands.");
+    publishCombinedMotorCommands(); 
+}
+
 void RobotManager::publishCombinedMotorCommands() {
     // Get commands from GaitManager (lower body)
     const double* gait_motor_commands = gait_manager_->getGaitMotorCommands();
@@ -218,9 +223,6 @@ void RobotManager::publishCombinedMotorCommands() {
     }
 }
 
-void RobotManager::publishTimerCallback(const ros::TimerEvent&) {
-    publishCombinedMotorCommands();
-}
 
 // --- Main Function ---
 int main(int argc, char **argv) {

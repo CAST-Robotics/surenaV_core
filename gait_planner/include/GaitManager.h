@@ -10,6 +10,7 @@
 #include <ros/package.h>
 
 #include <std_srvs/Empty.h>
+#include <std_msgs/Empty.h>
 #include <std_msgs/Int32.h>
 #include <sensor_msgs/JointState.h>
 #include "sensor_msgs/Imu.h"
@@ -93,6 +94,7 @@ private:
     ros::ServiceServer keyboardWalkService_;
     ros::ServiceServer homeService_;
     ros::ServiceServer dummyCommand_;
+    ros::Publisher publish_trigger_pub_;
     bool isWalkingWithKeyboard;
     bool isKeyboardTrajectoryEnabled;
     bool qcInitialBool_;
