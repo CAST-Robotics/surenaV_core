@@ -42,7 +42,7 @@ void Robot::initROSCommunication()
     zmpDataPub_ = nh_->advertise<geometry_msgs::PoseStamped>("/surena/zmp_position", 100);
     comDataPub_ = nh_->advertise<geometry_msgs::PoseStamped>("/surena/com_pose", 100);
     xiDataPub_ = nh_->advertise<geometry_msgs::Twist>("/xi_data", 100);
-    gazeboJointStatePub_ = nh_->advertise<std_msgs::Float64MultiArray>("/joint_angles_gazebo", 100);
+
 }
 
 void Robot::initializeRobotParams()
@@ -171,11 +171,9 @@ void Robot::spinOnline(double config[], double jnt_vel[], Vector3d torque_r, Vec
         q_gazebo[16] = leftArmswingTraj_[index_]; // Place left arm angle in the Gazebo message
     }
 
-    joint_angles_gazebo_.data.clear();
-    for (int i = 0; i < 29; i++) {
-        joint_angles_gazebo_.data.push_back(q_gazebo[i]);
+    for (int i = 0; i < 29; ++i) {
+        robot_gazebo_commands[i] = q_gazebo[i];
     }
-    gazeboJointStatePub_.publish(joint_angles_gazebo_);
 
     prevCommandedCoMPos_ = currentCommandedCoMPos_;
     prevCommandedCoMRot_ = currentCommandedCoMRot_;
@@ -1226,4 +1224,10 @@ Robot::~Robot()
     delete anklePlanner_;
     delete DCMPlanner_;
     delete ankleColide_;
+}
+
+const double* Robot::getRobotGazeboCommands() const {
+
+    return robot_gazebo_commands;
+
 }

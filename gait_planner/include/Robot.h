@@ -46,7 +46,8 @@ class Robot
 public:
     Robot(ros::NodeHandle *nh, std::string config_path, bool simulation=false);
     ~Robot();
-
+    
+    const double* getRobotGazeboCommands() const;
     void initROSCommunication();
     void initializeRobotParams();
     void initializeLinkObjects(Vector3d a[], Vector3d b[], Vector3d com_pos[], double links_mass[]);
@@ -135,7 +136,7 @@ private:
     ros::NodeHandle *nh_;
     std::string robotConfigPath_;
     bool simulation_;
-    std_msgs::Float64MultiArray joint_angles_gazebo_;
+
 
     double thigh_;
     double shank_;
@@ -148,6 +149,8 @@ private:
     double totalMass_;
 
     double joints_[12];
+
+
 
     Controller *onlineWalk_;
 
@@ -218,7 +221,6 @@ private:
     ros::Publisher comDataPub_;
     ros::Publisher xiDataPub_;
     ros::Publisher footStepPub_;
-    ros::Publisher gazeboJointStatePub_;
     bool isTrajAvailable_;
     bool useController_;
 
@@ -238,4 +240,5 @@ private:
     Vector3d rZMP_;    
     std::vector<double> rightArmswingTraj_;
     std::vector<double> leftArmswingTraj_;
+    double robot_gazebo_commands[29]; 
 };

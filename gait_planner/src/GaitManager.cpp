@@ -182,7 +182,7 @@ const double* GaitManager::getGaitMotorCommands() const {
 
 const double* GaitManager::getGaitGazeboCommands() const {
     std::lock_guard<std::mutex> lock(command_mutex_);
-    return gait_gazebo_commands;
+    return robot-> getRobotGazeboCommands();
 }
 
 void GaitManager::qcInitial(const sensor_msgs::JointState &msg)
@@ -821,17 +821,12 @@ bool GaitManager::computeLowerLimbJointMotion(double jnt_command[], int iter)
             }
 
             // commandConfig_[2][j] = absDir_[j] * abs2rad(absData_[j] - homeAbs_[j]);
-            gait_gazebo_commands[j] = jnt_command[j];
         }
         else
         {
             cout << "joint " << j << " out of workspace in iteration " << iter << ", angle difference: " << dif << endl;
             return false;
         }
-    }
-    for (int i = 12; i < 29; ++i) {
-        motorCommandArray_[i] = 0; 
-        gait_gazebo_commands[i] = 0.0; 
     }
 }
 

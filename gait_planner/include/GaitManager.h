@@ -35,7 +35,7 @@ class GaitManager
 public:
     GaitManager(ros::NodeHandle *n);
 
-    const double* getGaitMotorCommands() const; 
+    const double* getGaitMotorCommands() const;
     const double* getGaitGazeboCommands() const; 
 
     // Lower Body
@@ -109,7 +109,6 @@ private:
     int motorDir_[12];
     bool collision_;
     int bumpOrder_[8];
-    double gait_gazebo_commands[12] = {0.0};
     mutable std::mutex command_mutex_;
 
     // Ankle Mechanism Parameters
