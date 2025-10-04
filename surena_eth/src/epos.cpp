@@ -875,7 +875,12 @@ void Epos::DataReceived(QByteArray data)
     GetBumpDataFromPacket(bumpPacket);
     GetFTSensorDataFromPacket(incommingPacket);
     GetIMUDataFromPacket(incommingPacket);
-    emit FeedBackReceived(ft,positions,positionsInc,bump_sensor_list, imu_data_list, pressureData);
+
+    uint16_t hall_effect = data[285]&0xff;
+    hall_effect<<=8;
+    hall_effect |= data[286]&0xff;
+
+    emit FeedBackReceived(ft,positions,positionsInc,bump_sensor_list, imu_data_list, pressureData,hall_effect);
 }
 //========================================================================
 void Epos::WaitMs(int ms)

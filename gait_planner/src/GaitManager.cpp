@@ -21,6 +21,7 @@ GaitManager::GaitManager(ros::NodeHandle *n)
     GyroSub_ = n->subscribe("/imu/angular_velocity", 100, &GaitManager::GyroCallback, this);
     bumpSub_ = n->subscribe("/surena/bump_sensor_state", 100, &GaitManager::bumpCallback, this);
     keyboardCommandSub_ = n->subscribe("/keyboard_command", 1, &GaitManager::keyboardHandler, this);
+    keyboardWalkSeqService_ = n->advertiseService("keyboard_walk_seq", &GaitManager::keyboardWalkSeq, this);
     publish_trigger_pub_ = n->advertise<std_msgs::Empty>("robot_manager/publish_trigger", 1);
 
     b = 0.049;
@@ -877,6 +878,8 @@ void GaitManager::keyboardHandler(const std_msgs::Int32 &msg)
 
     int command = msg.data;
 
+    double com_z = robot->getCOMZ();
+
     // if (command == 101) // e
     // {
     //     trajSize_ = robot->changeStep();
@@ -996,7 +999,7 @@ void GaitManager::keyboardHandler(const std_msgs::Int32 &msg)
             break;
 
         case 117: // u: comming up
-            init_com_pos[2] = COM_height;
+            init_com_pos[2] = com_z;
             final_com_pos[2] = 0.71;
             robot->generalTrajGen(dt, 2, init_com_pos, final_com_pos, init_com_orient, final_com_orient,
                           init_lankle_pos, final_lankle_pos, init_lankle_orient, final_lankle_orient,
@@ -1248,6 +1251,192 @@ void GaitManager::yawMechanismFK(double &alpha, double theta, double R, double B
     alpha = atan(R * sin(theta) / (B + R * cos(theta)));
     alpha += alpha_home;
 }
+
+bool GaitManager::keyboardWalkSeq(gait_planner::KeyboardWalkSeq::Request &req,
+                                  gait_planner::KeyboardWalkSeq::Response &res)
+{
+    this->emptyCommand();
+
+    double dt = 0.005;
+    double step_width = 0.0;
+    double alpha = 0.44;
+    double t_double_support = 0.1;
+    double t_step = 1.0;
+    double step_length = 0.0;
+    double COM_height = 0.68;
+    double step_count = 2;
+    double ankle_height = 0.025;
+    double step_height = 0.0;
+    double theta = 0.0;
+    double slope = 0.0;
+    double offset = 0.01;
+    bool is_config = false;
+
+    double init_com_orient[3] = {0,0,0};
+    double final_com_orient[3] = {0,0,0};
+    double init_lankle_pos[3] = {0, 0.0975, 0};
+    double init_lankle_orient[3] = {0,0,0};
+    double final_lankle_pos[3] = {0, 0.0975, 0};
+    double final_lankle_orient[3] = {0,0,0};
+    double init_rankle_pos[3] = {0, -0.0975, 0};
+    double init_rankle_orient[3] = {0,0,0};
+    double final_rankle_pos[3] = {0, -0.0975, 0};
+    double final_rankle_orient[3] = {0,0,0};
+
+    auto gen_from_key = [&](char c)->bool {
+        switch (c) {
+            case 'w': case 'W': // w: move forward 
+                step_count = 4; step_length = 0.16; theta = 0.0;
+                robot->trajGen(step_count, t_step, alpha, t_double_support, COM_height, step_length,
+                               step_width, dt, theta, ankle_height, step_height, slope, offset, is_config);
+                { double hand_swing_angle_deg = 20.0;
+                  robot->handMotion(t_step, step_count, hand_swing_angle_deg, dt, false, false); }
+                return true;
+            case 's': case 'S': // s: move backward
+                step_count = 2; step_length = -0.15; theta = 0.0;
+                robot->trajGen(step_count, t_step, alpha, t_double_support, COM_height, step_length,
+                               step_width, dt, theta, ankle_height, step_height, slope, offset, is_config);
+                return true;
+            case 'a': case 'A': // a: turn left
+                step_count = 4; step_length = -0.15; theta = 0.12;
+                robot->trajGen(step_count, t_step, alpha, t_double_support, COM_height, step_length,
+                               step_width, dt, theta, ankle_height, step_height, slope, offset, is_config);
+                return true;
+            case 'd': case 'D': // d: turn right
+                step_count = 4; step_length = 0.15; theta = 0.12;
+                robot->trajGen(step_count, t_step, alpha, t_double_support, COM_height, step_length,
+                               step_width, dt, theta, ankle_height, step_height, slope, offset, is_config);
+                return true;
+            case 'h': case 'H': //h: in place turn right
+                step_count = 4; step_length = 0.02; theta = 0.10;
+                robot->trajGen(step_count, t_step, alpha, t_double_support, COM_height, step_length,
+                               step_width, dt, theta, ankle_height, step_height, slope, offset, is_config);
+                return true;
+            case 'g': case 'G': //h: in place turn left
+                step_count = 4; step_length = -0.02; theta = 0.10;
+                robot->trajGen(step_count, t_step, alpha, t_double_support, COM_height, step_length,
+                               step_width, dt, theta, ankle_height, step_height, slope, offset, is_config);
+                return true;
+            case 'm': case 'M': // m: height reduction
+                {step_count = 2; step_length = 0.15; theta = 0.0;
+                robot->trajGen(step_count, t_step, alpha, t_double_support, COM_height, step_length,
+                               step_width, dt, theta, ankle_height, step_height, slope, offset, is_config);
+                double ic[3]={0,0,0.68}, fc[3]={0,0,0.64};
+                robot->generalTrajGen(dt, 2, ic, fc, init_com_orient, final_com_orient,
+                                      init_lankle_pos, final_lankle_pos, init_lankle_orient, final_lankle_orient,
+                                      init_rankle_pos, final_rankle_pos, init_rankle_orient, final_rankle_orient);
+                step_count = 2; step_length = 0.15; theta = 0.0; COM_height = 0.64;
+                robot->trajGen(step_count, t_step, alpha, t_double_support, COM_height, step_length,
+                               step_width, dt, theta, ankle_height, step_height, slope, offset, is_config);
+                double ic2[3]={0,0,0.64}, fc2[3]={0,0,0.68};
+                robot->generalTrajGen(dt, 2, ic2, fc2, init_com_orient, final_com_orient,
+                                      init_lankle_pos, final_lankle_pos, init_lankle_orient, final_lankle_orient,
+                                      init_rankle_pos, final_rankle_pos, init_rankle_orient, final_rankle_orient);
+                COM_height = 0.68;
+                return true;
+            }
+            case 'u': case 'U': //comming up
+            {   
+                double ic[3]={0,0,COM_height}, fc[3]={0,0,0.71};
+                robot->generalTrajGen(dt, 2, ic, fc, init_com_orient, final_com_orient,
+                                      init_lankle_pos, final_lankle_pos, init_lankle_orient, final_lankle_orient,
+                                      init_rankle_pos, final_rankle_pos, init_rankle_orient, final_rankle_orient);
+                return true;
+            }
+            case 'j': case 'J': //comming down
+            {
+                double ic[3]={0,0,0.71}, fc[3]={0,0,COM_height};
+                robot->generalTrajGen(dt, 2, ic, fc, init_com_orient, final_com_orient,
+                                      init_lankle_pos, final_lankle_pos, init_lankle_orient, final_lankle_orient,
+                                      init_rankle_pos, final_rankle_pos, init_rankle_orient, final_rankle_orient);
+                return true;
+            }
+            case 27:
+                return false;
+            default:
+                return true;
+        }
+    };
+
+    auto execute_traj = [&]()->bool {
+        ros::Rate rate_(200);
+        int iter = 0;
+        while (true) {
+            int final_iter = robot->getTrajSize();
+            if (iter < final_iter) {
+                double config[12], jnt_vel[12], jnt_command[12];
+                for (int i = 0; i < 12; i++) {
+                    config[i] = commandConfig_[2][i];
+                    jnt_vel[i] = (commandConfig_[0][i] - 4 * commandConfig_[1][i] + 3 * commandConfig_[2][i]) / (2 * dt);
+                }
+                double left_ft[3]  = {-currentLFT_[0], -currentLFT_[2], -currentLFT_[1]};
+                double right_ft[3] = {-currentRFT_[0], -currentRFT_[2], -currentRFT_[1]};
+                int right_bump[4]  = {currentRBump_[0], currentRBump_[1], currentRBump_[2], currentRBump_[3]};
+                int left_bump[4]   = {currentLBump_[0], currentLBump_[1], currentLBump_[2], currentLBump_[3]};
+                double acc[3]      = {baseAcc_[0], baseAcc_[1], baseAcc_[2]};
+                double gyro[3]     = {baseAngVel_[0], baseAngVel_[1], baseAngVel_[2]};
+
+                int status = 0;
+                robot->getJointAngs(iter, config, jnt_vel, right_ft, left_ft, right_bump,
+                                    left_bump, gyro, acc, jnt_command, status);
+                if (status != 0) return false;
+
+                double r_arm=0.0, l_arm=0.0;
+                robot->getArmAnglesForIteration(iter, r_arm, l_arm);
+                motorCommandArray_[12] = int(r_arm * encoderResolution[0] * harmonicRatio[0] / M_PI / 2);
+                motorCommandArray_[16] = -int(l_arm * encoderResolution[0] * harmonicRatio[0] / M_PI / 2);
+                motorCommandArray_[23] = 90;
+
+                computeLowerLimbJointMotion(jnt_command, iter);
+                sendCommand();
+
+                iter++;
+            } else {
+                robot->resetTraj();
+                return true;
+            }
+            ros::spinOnce();
+            rate_.sleep();
+        }
+    };
+
+    std::vector<char> cmds;
+    for (char c : req.seq) {
+        if (c==' '||c=='\t'||c=='\n'||c=='\r') continue;
+        cmds.push_back(c);
+    }
+    if (cmds.empty()) { res.success=false; res.message="empty"; return true; }
+
+    size_t i0=0; while (i0<cmds.size() && (cmds[i0]==' ')) ++i0;
+    if (cmds[i0] != 'j' && cmds[i0] != 'J') { res.success=false; res.message="must-start-with-j"; return true; }
+
+    for (size_t i=0;i<cmds.size();++i){
+        char c = cmds[i];
+        if (c=='u' || c=='U') {
+            size_t j=i+1;
+            while (j<cmds.size() && (cmds[j]==' ')) ++j;
+            if (j>=cmds.size() || !(cmds[j]=='j' || cmds[j]=='J')) {
+                res.success=false; res.message="u-must-be-followed-by-j"; return true;
+            }
+        }
+    }
+
+    if (!(cmds.back()=='u' || cmds.back()=='U')) cmds.push_back('u');
+
+    for (size_t i=0; i<cmds.size(); ++i) {
+        char c = cmds[i];
+        bool ok = gen_from_key(c);
+        if (!ok) { res.success=false; res.message="rejected"; return true; }
+        if (!execute_traj()) { res.success=false; res.message="collision"; return true; }
+        if (i+1<cmds.size()) ros::Duration(2.0).sleep();
+    }
+
+    res.success = true;
+    res.message = "done";
+    return true;
+}
+
+
 
 // int main(int argc, char **argv)
 // {

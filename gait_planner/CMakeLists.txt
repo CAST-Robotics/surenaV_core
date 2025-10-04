@@ -64,6 +64,7 @@ add_service_files(
   command.srv
   Trajectory.srv
   GeneralTraj.srv
+  KeyboardWalkSeq.srv
 )
 
 ## Generate actions in the 'action' folder

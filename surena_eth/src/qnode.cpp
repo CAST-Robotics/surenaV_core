@@ -85,6 +85,7 @@ bool QNode::Init() {
     _jointPublisher =    n.advertise<sensor_msgs::JointState>("surena/abs_joint_state", 1000);
     _incJointPublisher = n.advertise<sensor_msgs::JointState>("surena/inc_joint_state", 1000);
     _bumpPublisher = n.advertise<std_msgs::Int32MultiArray>("surena/bump_sensor_state", 1000);
+    _hallPublisher =    n.advertise<std_msgs::Int32>("surena/hall_state", 1000);
     _pressurePublisher = n.advertise<std_msgs::Float32MultiArray>("surena/pressure_sensor_state", 1000);
 
     QLOG_TRACE()<<"Initializing all ros services";
@@ -455,6 +456,8 @@ void QNode::run() {
     _jointPublisher.publish(ActualJointState);
     _incJointPublisher.publish(IncJointState);
     UpdateRobotModel(ActualPositions);
+    _hallPublisher.publish(HallEffect);
+
     ros::spinOnce();
     loop_rate.sleep();
         }

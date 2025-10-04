@@ -23,6 +23,8 @@
 #include "gait_planner/JntAngs.h"
 #include "gait_planner/Trajectory.h"
 #include "gait_planner/GeneralTraj.h"
+#include <gait_planner/KeyboardWalkSeq.h>
+
 
 #include <Robot.h>
 
@@ -64,6 +66,8 @@ public:
     bool walk(gait_planner::Trajectory::Request &req,
               gait_planner::Trajectory::Response &res);
     bool keyboardWalk(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
+    bool keyboardWalkSeq(gait_planner::KeyboardWalkSeq::Request &req,
+            gait_planner::KeyboardWalkSeq::Response &res);
     void keyboardHandler(const std_msgs::Int32 &msg);
     bool computeLowerLimbJointMotion(double jnt_command[], int iter);
     int sgn(double v);
@@ -94,7 +98,9 @@ private:
     ros::ServiceServer keyboardWalkService_;
     ros::ServiceServer homeService_;
     ros::ServiceServer dummyCommand_;
+    ros::ServiceServer keyboardWalkSeqService_;
     ros::Publisher publish_trigger_pub_;
+    
     bool isWalkingWithKeyboard;
     bool isKeyboardTrajectoryEnabled;
     bool qcInitialBool_;

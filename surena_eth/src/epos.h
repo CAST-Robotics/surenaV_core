@@ -281,7 +281,7 @@ signals:
     void Dummy();
     //================================================================================================================================================================
 
-    void  FeedBackReceived(QList<int16_t> ft, QList<int32_t> positions,QList<int32_t> positionsInc,QList<uint16_t> bump_sensor_list,QList<float> imu_data_list, float* pressureData);
+    void  FeedBackReceived(QList<int16_t> ft, QList<int32_t> positions,QList<int32_t> positionsInc,QList<uint16_t> bump_sensor_list,QList<float> imu_data_list, float* pressureData,uint16_t hall_effect);
     //================================================================================================================================================================
 
 

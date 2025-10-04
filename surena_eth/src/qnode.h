@@ -40,6 +40,7 @@
 #include <QTimer>
 #include <QApplication>
 #include <std_msgs/Int32MultiArray.h>
+#include <std_msgs/Int32.h>
 #include <std_msgs/Float32MultiArray.h>
 #include <interactive_markers/interactive_marker_server.h>
 #include <interactive_markers/menu_handler.h>
@@ -72,7 +73,7 @@ private:
     int _lastOperationResult=0;
     ros::Subscriber _jointsSubscriber;
     ros::Publisher chatter_publisher;
-    ros::Publisher _imuPublisher,_jointPublisher,_incJointPublisher,_bumpPublisher,_rigthtFtPublisher,_leftFtPublisher,_pressurePublisher;
+    ros::Publisher _imuPublisher,_jointPublisher,_incJointPublisher,_hallPublisher,_bumpPublisher,_rigthtFtPublisher,_leftFtPublisher,_pressurePublisher;
     QStringListModel logging_model;
     ros::ServiceServer _updatePositions;
     ros::ServiceServer _activeCSPService;
@@ -101,6 +102,7 @@ public:
     std_msgs::Int32MultiArray  JointsData;
     QList<double> ActualPositions;
     QList<double> IncPositions;
+    std_msgs::Int32 HallEffect;    
     int BumpSensor[8];
     double Imu[6];
     sensor_msgs::Imu imuSesnsorMsg;

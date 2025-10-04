@@ -63,7 +63,6 @@ add_service_files(
   move_hand_single.srv
   move_hand_both.srv
   gripOnline.srv
-  home_service.srv
   SetTargetClass.srv
   head_track.srv
   WriteString.srv

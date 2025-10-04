@@ -28,7 +28,6 @@
 #include "hand_planner/move_hand_single.h"
 #include "hand_planner/move_hand_both.h"
 #include "hand_planner/gripOnline.h"
-#include "hand_planner/home_service.h"
 #include "hand_planner/SetTargetClass.h"
 #include "hand_planner/head_track.h"
 #include "hand_planner/WriteString.h"
@@ -57,7 +56,6 @@ private:
     ros::ServiceServer move_hand_single_service;
     ros::ServiceServer move_hand_both_service;
     ros::ServiceServer grip_online_service;
-    ros::ServiceServer home_service;
     ros::ServiceServer set_target_class_service;
     ros::ServiceServer head_track_service;
     ros::ServiceServer teleoperation_service;
@@ -102,10 +100,17 @@ private:
     Eigen::VectorXd q_right_baseline_;
     Eigen::Matrix3d R_right_state_;
 
+    Eigen::VectorXd q_left_state_;
+    Eigen::VectorXd q_left_baseline_;
+    Eigen::Matrix3d R_left_state_;
+
+
     double T;
     int rate;
     bool simulation;
     bool right_state_init_;
+    bool left_state_init_;
+
     bool hand_keyboard_enabled_ =false;
     int encoderResolution[2];
     int harmonicRatio[4];
@@ -136,7 +141,6 @@ private:
 
     bool single_hand(hand_planner::move_hand_single::Request &req, hand_planner::move_hand_single::Response &res);
     bool both_hands(hand_planner::move_hand_both::Request &req, hand_planner::move_hand_both::Response &res);
-    bool home(hand_planner::home_service::Request &req, hand_planner::home_service::Response &res);
     bool grip_online(hand_planner::gripOnline::Request &req, hand_planner::gripOnline::Response &res);
     bool setTargetClassService(hand_planner::SetTargetClass::Request &req, hand_planner::SetTargetClass::Response &res);
     bool head_track_handler(hand_planner::head_track::Request &req, hand_planner::head_track::Response &res);

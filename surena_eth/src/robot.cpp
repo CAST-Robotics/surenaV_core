@@ -29,7 +29,7 @@ Robot::Robot(QObject *parent, int argc, char **argv)
     connect(_rosNode,SIGNAL(DoActivateLegs()),this,SLOT(ActivateLegs()));
     connect(_rosNode,SIGNAL(DoReadError()),this,SLOT(ReadErrors()));
     connect(_rosNode,SIGNAL(SetHome(int)),this,SLOT(Home(int)));
-    connect(&Epos4,SIGNAL(FeedBackReceived(QList<int16_t>,QList<int32_t>,QList<int32_t>,QList<uint16_t>,QList<float>, float*)),this,SLOT(FeedBackReceived(QList<int16_t>,QList<int32_t>,QList<int32_t>,QList<uint16_t>,QList<float>, float*)));
+    connect(&Epos4,SIGNAL(FeedBackReceived(QList<int16_t>,QList<int32_t>,QList<int32_t>,QList<uint16_t>,QList<float>, float*,uint16_t)),this,SLOT(FeedBackReceived(QList<int16_t>,QList<int32_t>,QList<int32_t>,QList<uint16_t>,QList<float>, float*,uint16_t)));
     connect(&_initialTimer,SIGNAL(timeout()),this,SLOT(Initialize()));
 
 
@@ -155,7 +155,7 @@ void Robot::NewjointDataReceived()
     Epos4.SetAllPositionCST(_motorPosition);
 }
 //=================================================================================================
-void  Robot::FeedBackReceived(QList<int16_t> ft, QList<int32_t> positions,QList<int32_t> positionsInc,QList<uint16_t> bump_sensor_list,QList<float> imu_data_list, float* pressureData)
+void  Robot::FeedBackReceived(QList<int16_t> ft, QList<int32_t> positions,QList<int32_t> positionsInc,QList<uint16_t> bump_sensor_list,QList<float> imu_data_list, float* pressureData,uint16_t hall_effect)
 {
     for(int i=0;i<12;i++){
         CurrentAbsPositions[i]=positions[i];
@@ -174,6 +174,7 @@ void  Robot::FeedBackReceived(QList<int16_t> ft, QList<int32_t> positions,QList<
     for(int i=0;i<6;i++){
         _rosNode->pressureData[i]= pressureData[i];
     }
+ _rosNode->HallEffect.data=hall_effect; 
 }
 //=================================================================================================
 void Robot::ActiveCSP(int id)
