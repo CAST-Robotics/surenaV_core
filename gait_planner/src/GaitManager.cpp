@@ -143,7 +143,7 @@ bool GaitManager::setPos(int jointID, int dest)
             }
         }
         sendGaitMotorCommands();
-        this->publish_trigger_pub_.publish(std_msgs::Empty());
+        publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
     }
     return true;
@@ -326,7 +326,7 @@ bool GaitManager::emptyCommand()
     rate_.sleep();
     motorCommandArray_[0] -= 1;
     sendGaitMotorCommands();
-    this->publish_trigger_pub_.publish(std_msgs::Empty());
+    publish_trigger_pub_.publish(std_msgs::Empty());
     rate_.sleep();
     return true;
 }
@@ -361,7 +361,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
             motorCommandArray_[4] += outer_delta_inc / 100;
             motorCommandArray_[5] += inner_delta_inc / 100;
             sendGaitMotorCommands();
-            this->publish_trigger_pub_.publish(std_msgs::Empty());
+            publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
         }
     }
@@ -389,7 +389,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
             motorCommandArray_[4] += outer_delta_inc / 100;
             motorCommandArray_[5] += inner_delta_inc / 100;
             sendGaitMotorCommands();
-            this->publish_trigger_pub_.publish(std_msgs::Empty());
+            publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
         }
     }
@@ -417,7 +417,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
             motorCommandArray_[10] += outer_delta_inc / 100;
             motorCommandArray_[11] += inner_delta_inc / 100;
             sendGaitMotorCommands();
-            this->publish_trigger_pub_.publish(std_msgs::Empty());
+            publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
         }
     }
@@ -445,7 +445,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
             motorCommandArray_[10] += outer_delta_inc / 100;
             motorCommandArray_[11] += inner_delta_inc / 100;
             sendGaitMotorCommands();
-            this->publish_trigger_pub_.publish(std_msgs::Empty());
+            publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
         }
     }
@@ -459,7 +459,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
         {
             motorCommandArray_[0] += yaw_inc / 100;
             sendGaitMotorCommands();
-            this->publish_trigger_pub_.publish(std_msgs::Empty());
+            publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
         }
     }
@@ -472,7 +472,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
         {
             motorCommandArray_[6] += yaw_inc / 100;
             sendGaitMotorCommands();
-            this->publish_trigger_pub_.publish(std_msgs::Empty());
+            publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
         }
     }
@@ -480,7 +480,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
     {
         motorCommandArray_[req.motor_id] = req.angle;
         sendGaitMotorCommands();
-        this->publish_trigger_pub_.publish(std_msgs::Empty());
+        publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
         res.result = true; 
         return true;    
@@ -492,7 +492,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
         {
             motorCommandArray_[req.motor_id] += sgn(inc) * 100;
             sendGaitMotorCommands();
-            this->publish_trigger_pub_.publish(std_msgs::Empty());
+            publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
             res.result = true; 
             return true;    
@@ -573,7 +573,7 @@ bool GaitManager::ankleHome(bool is_left, int roll_dest, int pitch_dest)
             }
         }
         sendGaitMotorCommands();
-        this->publish_trigger_pub_.publish(std_msgs::Empty());
+        publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
     }
     while (abs(abs(absData_[outer]) - pitch_dest) > 100)
@@ -594,7 +594,7 @@ bool GaitManager::ankleHome(bool is_left, int roll_dest, int pitch_dest)
             }
         }
         sendGaitMotorCommands();
-        this->publish_trigger_pub_.publish(std_msgs::Empty());
+        publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
     }
 }
@@ -732,7 +732,7 @@ bool GaitManager::walk(gait_planner::Trajectory::Request &req,
         }
         computeLowerLimbJointMotion(jnt_command, iter);
         sendGaitMotorCommands();
-        this->publish_trigger_pub_.publish(std_msgs::Empty());
+        publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
         iter++;
     }
@@ -1113,7 +1113,7 @@ bool GaitManager::keyboardWalk(std_srvs::Empty::Request &req, std_srvs::Empty::R
 
             computeLowerLimbJointMotion(jnt_command, iter);
             sendGaitMotorCommands();
-            this->publish_trigger_pub_.publish(std_msgs::Empty());
+            publish_trigger_pub_.publish(std_msgs::Empty());
             iter++;
         }
         // if (iter == trajSize_ - 1)
@@ -1388,7 +1388,9 @@ bool GaitManager::keyboardWalkSeq(gait_planner::KeyboardWalkSeq::Request &req,
                 motorCommandArray_[23] = 90;
 
                 computeLowerLimbJointMotion(jnt_command, iter);
-                sendCommand();
+                
+                sendGaitMotorCommands();
+                publish_trigger_pub_.publish(std_msgs::Empty());
 
                 iter++;
             } else {

@@ -182,9 +182,12 @@ void RobotManager::publishCombinedMotorCommands() {
     const std::vector<double>& hand_motor_commands = hand_manager_->getHandMotorCommands();
     const std::vector<double>& hand_gazebo_commands = hand_manager_->getHandGazeboCommands();
 
+    // Get commands from FingerControl (hands)
+    const std::vector<double>& finger_motor_commands = hand_manager_->getFingerMotorCommands();
+
     if (!hand_manager_->getSimulationMode()) { 
         combined_motor_command_msg_.data.clear();
-        combined_motor_command_msg_.data.reserve(29);
+        combined_motor_command_msg_.data.reserve(29+17);
 
         for (int i = 0; i < 12; ++i) {
             combined_motor_command_msg_.data.push_back(gait_motor_commands[i]);
@@ -192,6 +195,17 @@ void RobotManager::publishCombinedMotorCommands() {
         for (int i = 12; i < 29; ++i) {
             combined_motor_command_msg_.data.push_back(hand_motor_commands[i]);
         }
+        for (int i = 0; i < 17; ++i) {
+            combined_motor_command_msg_.data.push_back(finger_motor_commands[i]);
+        }
+
+        if (gait_motor_commands[12] != 0) { // If GaitManager provides a value for Right Arm Shoulder Yaw
+            combined_motor_command_msg_.data[12] = gait_motor_commands[12];
+        }
+        if (gait_motor_commands[16] != 0) { // If GaitManager provides a value for Left Arm Shoulder Yaw
+            combined_motor_command_msg_.data[16] = gait_motor_commands[16];
+        }
+
         combined_motor_pub_.publish(combined_motor_command_msg_);
 
         for (size_t i = 0; i < combined_motor_command_msg_.data.size(); ++i) {
@@ -213,6 +227,14 @@ void RobotManager::publishCombinedMotorCommands() {
         for (int i = 12; i < 29; ++i) {
             combined_gazebo_command_msg_.data.push_back(hand_gazebo_commands[i]);
         }
+
+        if (gait_gazebo_commands[12] != 0.0) {
+            combined_gazebo_command_msg_.data[12] = gait_gazebo_commands[12];
+        }
+        if (gait_gazebo_commands[16] != 0.0) {
+            combined_gazebo_command_msg_.data[16] = gait_gazebo_commands[16];
+        }
+
         combined_gazebo_pub_.publish(combined_gazebo_command_msg_);
         
         for (size_t i = 0; i < combined_gazebo_command_msg_.data.size(); ++i) {

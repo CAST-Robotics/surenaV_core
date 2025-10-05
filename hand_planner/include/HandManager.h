@@ -49,6 +49,7 @@ public:
 
     const std::vector<double>& getHandMotorCommands() const;
     const std::vector<double>& getHandGazeboCommands() const;
+    const std::vector<double>& getFingerMotorCommands() const;
     bool getSimulationMode() const { return simulation; }
 
 private:

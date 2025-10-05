@@ -8,7 +8,7 @@ HandManager::HandManager(ros::NodeHandle *n) :
     // Initialize parameters
     T(0.005),
     rate(200),
-    simulation(true),
+    simulation(false),
     X(1.0), Y(0.0), Z(0.0),
     tempX(1.0), tempY(0.0), tempZ(0.0),
     h_pitch(0), h_roll(0), h_yaw(0),
@@ -128,6 +128,11 @@ const std::vector<double>& HandManager::getHandMotorCommands() const {
 const std::vector<double>& HandManager::getHandGazeboCommands() const {
     std::lock_guard<std::mutex> lock(command_mutex_);
     return hand_gazebo_commands_;
+}
+
+const std::vector<double>& HandManager::getFingerMotorCommands() const {
+    std::lock_guard<std::mutex> lock(command_mutex_);
+    return finger_control_-> getFingerCommands();
 }
 
 void HandManager::joint_qc_callback(const std_msgs::Int32MultiArray::ConstPtr &qcArray) {
