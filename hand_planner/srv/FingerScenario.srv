@@ -1,0 +1,7 @@
+# Request
+string scenario_name
+string hand_selection  # "right", "left", "both" (default="right")
+---
+# Response
+bool success
+string message

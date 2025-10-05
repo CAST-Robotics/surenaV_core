@@ -148,10 +148,10 @@ void Robot::NewjointDataReceived()
     {
         _motorPosition.append(_rosNode->JointsData.data.at(i));
     }
-    for(int i=0; i<34-len ; i++)
+    for(int i=0; i<50-len ; i++)
         _motorPosition.append(0);
-
-
+    
+    
     Epos4.SetAllPositionCST(_motorPosition);
 }
 //=================================================================================================

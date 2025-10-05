@@ -1,0 +1,44 @@
+{
+  "scenarios": {
+    "grip_soft": {
+      "name": "grip_soft",
+      "target_positions": [100, 100, 100, 100, 100, 100],
+      "pressure_limits": [150, 150, 150, 150, 150, 150],
+      "pid_kp": 10,
+      "pid_ki": 2,
+      "pid_kd": 1
+    },
+    "grip_firm": {
+      "name": "grip_firm",
+      "target_positions": [200, 200, 200, 200, 200, 200],
+      "pressure_limits": [200, 200, 200, 200, 200, 200],
+      "pid_kp": 20,
+      "pid_ki": 1,
+      "pid_kd": 5
+    },
+    "release": {
+      "name": "release",
+      "target_positions": [50, 50, 50, 50, 50, 50],
+      "pressure_limits": [0, 0, 0, 0, 0, 0],
+      "pid_kp": 5,
+      "pid_ki": 0,
+      "pid_kd": 0
+    },
+    "precision_grip": {
+      "name": "precision_grip",
+      "target_positions": [150, 150, 150, 150, 150, 150],
+      "pressure_limits": [150, 150, 150, 150, 150, 150],
+      "pid_kp": 15,
+      "pid_ki": 1,
+      "pid_kd": 2
+    },
+    "power_grip": {
+      "name": "power_grip",
+      "target_positions": [255, 255, 255, 255, 255, 255],
+      "pressure_limits": [255, 255, 255, 255, 255, 255],
+      "pid_kp": 30,
+      "pid_ki": 2,
+      "pid_kd": 10
+    }
+  }
+}

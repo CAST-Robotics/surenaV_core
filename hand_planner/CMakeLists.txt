@@ -69,6 +69,8 @@ add_service_files(
   PickAndMove.srv
   KeyboardJog.srv
   MoveHandGeneral.srv
+  FingerControl.srv
+  FingerScenario.srv
   arm_back_to_home.srv
 )
 
