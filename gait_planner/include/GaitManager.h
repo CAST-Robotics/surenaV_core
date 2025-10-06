@@ -105,7 +105,7 @@ private:
     bool isKeyboardTrajectoryEnabled;
     bool qcInitialBool_;
     int homeOffset_[32];
-    double motorCommandArray_[29];
+    double motorCommandArray_[29] = {};
     int harmonicRatio_[12];
     float absData_[32];
     int incData_[32];

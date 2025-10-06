@@ -19,6 +19,8 @@ public:
     RobotManager(ros::NodeHandle *n);
 
 private:
+    bool simulation;
+
     // --- ROS Communication ---
     ros::NodeHandle* nh_;
     ros::ServiceServer execute_scenario_service_;

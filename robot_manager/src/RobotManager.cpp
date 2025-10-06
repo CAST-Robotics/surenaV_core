@@ -1,8 +1,10 @@
 #include "RobotManager.h"
 
 // --- CONSTRUCTOR ---
-RobotManager::RobotManager(ros::NodeHandle *n) : nh_(n) {
-
+RobotManager::RobotManager(ros::NodeHandle *n) : 
+    nh_(n),
+    simulation(true)
+{
     hand_manager_ = std::make_unique<HandManager>(nh_);
     gait_manager_ = std::make_unique<GaitManager>(nh_);
 
@@ -183,11 +185,10 @@ void RobotManager::publishCombinedMotorCommands() {
     const std::vector<double>& hand_gazebo_commands = hand_manager_->getHandGazeboCommands();
 
     // Get commands from FingerControl (hands)
-    const std::vector<double>& finger_motor_commands = hand_manager_->getFingerMotorCommands();
+    const std::vector<double>& finger_motor_commands = hand_manager_->getFingerMotorCommands();    
 
-    if (!hand_manager_->getSimulationMode()) { 
+    if (!simulation) { 
         combined_motor_command_msg_.data.clear();
-        combined_motor_command_msg_.data.reserve(29+17);
 
         for (int i = 0; i < 12; ++i) {
             combined_motor_command_msg_.data.push_back(gait_motor_commands[i]);
@@ -216,7 +217,6 @@ void RobotManager::publishCombinedMotorCommands() {
 
     } else { // Gazebo Simulation (radians)
         combined_gazebo_command_msg_.data.clear();
-        combined_gazebo_command_msg_.data.reserve(29);
 
         // Copy lower body commands from GaitManager (0-11)
         for (int i = 0; i < 12; ++i) {
@@ -226,6 +226,10 @@ void RobotManager::publishCombinedMotorCommands() {
 
         for (int i = 12; i < 29; ++i) {
             combined_gazebo_command_msg_.data.push_back(hand_gazebo_commands[i]);
+        }
+
+        for (int i = 0; i < 17; ++i) {
+            combined_gazebo_command_msg_.data.push_back(finger_motor_commands[i]);
         }
 
         if (gait_gazebo_commands[12] != 0.0) {

@@ -8,7 +8,6 @@ HandManager::HandManager(ros::NodeHandle *n) :
     // Initialize parameters
     T(0.005),
     rate(200),
-    simulation(false),
     X(1.0), Y(0.0), Z(0.0),
     tempX(1.0), tempY(0.0), tempZ(0.0),
     h_pitch(0), h_roll(0), h_yaw(0),
@@ -289,76 +288,73 @@ void HandManager::sendHandMotorCommands(const VectorXd& q_rad_right, const Vecto
     std::vector<double> q_motor_temp(29, 0); 
     std::vector<double> q_gazebo_temp(29, 0.0);
 
-    if (!simulation) {
-        // Right hand motors (indices 12-15)
-        q_motor_temp[12] = int(q_rad_right(0) * encoderResolution[0] * harmonicRatio[0] / (2 * M_PI));
-        q_motor_temp[13] = -int(q_rad_right(1) * encoderResolution[0] * harmonicRatio[1] / (2 * M_PI));
-        q_motor_temp[14] = int(q_rad_right(2) * encoderResolution[1] * harmonicRatio[2] / (2 * M_PI));
-        q_motor_temp[15] = -int(q_rad_right(3) * encoderResolution[1] * harmonicRatio[3] / (2 * M_PI));
+    // Right hand motors (indices 12-15)
+    q_motor_temp[12] = int(q_rad_right(0) * encoderResolution[0] * harmonicRatio[0] / (2 * M_PI));
+    q_motor_temp[13] = -int(q_rad_right(1) * encoderResolution[0] * harmonicRatio[1] / (2 * M_PI));
+    q_motor_temp[14] = int(q_rad_right(2) * encoderResolution[1] * harmonicRatio[2] / (2 * M_PI));
+    q_motor_temp[15] = -int(q_rad_right(3) * encoderResolution[1] * harmonicRatio[3] / (2 * M_PI));
 
-        // Left hand motors (indices 16-19)
-        q_motor_temp[16] = -int(q_rad_left(0) * encoderResolution[0] * harmonicRatio[0] / (2 * M_PI));
-        q_motor_temp[17] = -int(q_rad_left(1) * encoderResolution[0] * harmonicRatio[1] / (2 * M_PI));
-        q_motor_temp[18] = int(q_rad_left(2) * encoderResolution[1] * harmonicRatio[2] / (2 * M_PI));
-        q_motor_temp[19] = int(q_rad_left(3) * encoderResolution[1] * harmonicRatio[3] / (2 * M_PI));
+    // Left hand motors (indices 16-19)
+    q_motor_temp[16] = -int(q_rad_left(0) * encoderResolution[0] * harmonicRatio[0] / (2 * M_PI));
+    q_motor_temp[17] = -int(q_rad_left(1) * encoderResolution[0] * harmonicRatio[1] / (2 * M_PI));
+    q_motor_temp[18] = int(q_rad_left(2) * encoderResolution[1] * harmonicRatio[2] / (2 * M_PI));
+    q_motor_temp[19] = int(q_rad_left(3) * encoderResolution[1] * harmonicRatio[3] / (2 * M_PI));
 
-        // Head motors (indices 20-22) - roll, pitch, yaw
-        q_motor_temp[20] = int(roll_command_range[0] + (roll_command_range[1] - roll_command_range[0]) *
-                         ((-(head_angles(0)*180/M_PI) - roll_range[0]) / (roll_range[1] - roll_range[0])));
-        q_motor_temp[21] = int(pitch_command_range[0] + (pitch_command_range[1] - pitch_command_range[0]) *
-                         ((-(head_angles(1)*180/M_PI) - pitch_range[0]) / (pitch_range[1] - pitch_range[0])));
-        q_motor_temp[22] = int(yaw_command_range[0] + (yaw_command_range[1] - yaw_command_range[0]) *
-                         ((-(head_angles(2)*180/M_PI) - yaw_range[0]) / (yaw_range[1] - yaw_range[0])));
+    // Head motors (indices 20-22) - roll, pitch, yaw
+    q_motor_temp[20] = int(roll_command_range[0] + (roll_command_range[1] - roll_command_range[0]) *
+                        ((-(head_angles(0)*180/M_PI) - roll_range[0]) / (roll_range[1] - roll_range[0])));
+    q_motor_temp[21] = int(pitch_command_range[0] + (pitch_command_range[1] - pitch_command_range[0]) *
+                        ((-(head_angles(1)*180/M_PI) - pitch_range[0]) / (pitch_range[1] - pitch_range[0])));
+    q_motor_temp[22] = int(yaw_command_range[0] + (yaw_command_range[1] - yaw_command_range[0]) *
+                        ((-(head_angles(2)*180/M_PI) - yaw_range[0]) / (yaw_range[1] - yaw_range[0])));
 
-        // Wrist calculations for right hand (indices 23-25)
-        q_motor_temp[23] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
-                            (((q_rad_right(4) * 180 / M_PI) - wrist_yaw_range[0]) / (wrist_yaw_range[1] - wrist_yaw_range[0])));
-        q_motor_temp[24] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
-                            (((hand_func_R.wrist_right_calc(q_rad_right(5), q_rad_right(6))) - (wrist_right_range[0])) / (wrist_right_range[1] - (wrist_right_range[0]))));
-        q_motor_temp[25] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
-                            (((hand_func_R.wrist_left_calc(q_rad_right(5), q_rad_right(6))) - wrist_left_range[0]) / (wrist_left_range[1] - wrist_left_range[0])));
+    // Wrist calculations for right hand (indices 23-25)
+    q_motor_temp[23] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
+                        (((q_rad_right(4) * 180 / M_PI) - wrist_yaw_range[0]) / (wrist_yaw_range[1] - wrist_yaw_range[0])));
+    q_motor_temp[24] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
+                        (((hand_func_R.wrist_right_calc(q_rad_right(5), q_rad_right(6))) - (wrist_right_range[0])) / (wrist_right_range[1] - (wrist_right_range[0]))));
+    q_motor_temp[25] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
+                        (((hand_func_R.wrist_left_calc(q_rad_right(5), q_rad_right(6))) - wrist_left_range[0]) / (wrist_left_range[1] - wrist_left_range[0])));
 
-        // Wrist calculations for left hand (indices 26-28)
-        q_motor_temp[26] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
-                            (((q_rad_left(4) * 180 / M_PI) - wrist_yaw_range[0]) / (wrist_yaw_range[1] - wrist_yaw_range[0])));
-        q_motor_temp[27] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
-                            (((hand_func_L.wrist_right_calc(q_rad_left(5), q_rad_left(6))) - (wrist_right_range[0])) / (wrist_right_range[1] - (wrist_right_range[0]))));
-        q_motor_temp[28] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
-                            (((hand_func_L.wrist_left_calc(q_rad_left(5), q_rad_left(6))) - wrist_left_range[0]) / (wrist_left_range[1] - wrist_left_range[0])));
+    // Wrist calculations for left hand (indices 26-28)
+    q_motor_temp[26] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
+                        (((q_rad_left(4) * 180 / M_PI) - wrist_yaw_range[0]) / (wrist_yaw_range[1] - wrist_yaw_range[0])));
+    q_motor_temp[27] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
+                        (((hand_func_L.wrist_right_calc(q_rad_left(5), q_rad_left(6))) - (wrist_right_range[0])) / (wrist_right_range[1] - (wrist_right_range[0]))));
+    q_motor_temp[28] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
+                        (((hand_func_L.wrist_left_calc(q_rad_left(5), q_rad_left(6))) - wrist_left_range[0]) / (wrist_left_range[1] - wrist_left_range[0])));
 
-        hand_motor_commands_ = q_motor_temp; // Store for RobotManager
-        last_q_motor = q_motor_temp; // Still useful for internal tracking if needed
+    hand_motor_commands_ = q_motor_temp; // Store for RobotManager
+    last_q_motor = q_motor_temp; // Still useful for internal tracking if needed
 
-    } else { // simulation
-        // Right hand joints
-        q_gazebo_temp[12] = q_rad_right(0);
-        q_gazebo_temp[13] = q_rad_right(1);
-        q_gazebo_temp[14] = q_rad_right(2);
-        q_gazebo_temp[15] = q_rad_right(3);
+    // Right hand joints
+    q_gazebo_temp[12] = q_rad_right(0);
+    q_gazebo_temp[13] = q_rad_right(1);
+    q_gazebo_temp[14] = q_rad_right(2);
+    q_gazebo_temp[15] = q_rad_right(3);
 
-        // Left hand joints
-        q_gazebo_temp[16] = q_rad_left(0);
-        q_gazebo_temp[16] = q_rad_left(1);
-        q_gazebo_temp[18] = q_rad_left(2);
-        q_gazebo_temp[19] = q_rad_left(3);
+    // Left hand joints
+    q_gazebo_temp[16] = q_rad_left(0);
+    q_gazebo_temp[17] = q_rad_left(1);
+    q_gazebo_temp[18] = q_rad_left(2);
+    q_gazebo_temp[19] = q_rad_left(3);
 
-        // Head joints
-        q_gazebo_temp[20] = -head_angles(0); // roll
-        q_gazebo_temp[21] = -head_angles(1); // pitch
-        q_gazebo_temp[22] = -head_angles(2); // yaw
+    // Head joints
+    q_gazebo_temp[20] = -head_angles(0); // roll
+    q_gazebo_temp[21] = -head_angles(1); // pitch
+    q_gazebo_temp[22] = -head_angles(2); // yaw
 
-        // Wrist joints for right hand
-        q_gazebo_temp[23] = q_rad_right(4);
-        q_gazebo_temp[24] = q_rad_right(5);
-        q_gazebo_temp[25] = q_rad_right(6);
+    // Wrist joints for right hand
+    q_gazebo_temp[23] = q_rad_right(4);
+    q_gazebo_temp[24] = q_rad_right(5);
+    q_gazebo_temp[25] = q_rad_right(6);
 
-        // Wrist joints for left hand
-        q_gazebo_temp[26] = q_rad_left(4);
-        q_gazebo_temp[27] = q_rad_left(5);
-        q_gazebo_temp[28] = q_rad_left(6);
+    // Wrist joints for left hand
+    q_gazebo_temp[26] = q_rad_left(4);
+    q_gazebo_temp[27] = q_rad_left(5);
+    q_gazebo_temp[28] = q_rad_left(6);
 
-        hand_gazebo_commands_ = q_gazebo_temp; // Store for RobotManager
-    }
+    hand_gazebo_commands_ = q_gazebo_temp; // Store for RobotManager
 }
 
 // --- Service Handler Implementations ---

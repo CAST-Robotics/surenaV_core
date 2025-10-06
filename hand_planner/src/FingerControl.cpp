@@ -38,6 +38,9 @@ bool FingerControl::executeScenario(const std::string& name, HandSelection hand)
     const FingerScenario& scenario = it->second;
     std::string hand_str = (hand == HandSelection::RIGHT_HAND) ? "right" : (hand == HandSelection::LEFT_HAND) ? "left" : "both";
     ROS_INFO("Executing scenario: %s for %s hand(s)", scenario.name.c_str(), hand_str.c_str());
+    for (int i = 0; i < 17; ++i) {
+        finger_commands_[i] = 0;
+    }
     
     // Fill positions (indices 0-5)
     for (int i = 0; i < 6; ++i) {
@@ -92,6 +95,9 @@ bool FingerControl::setDirectControl(const std::vector<uint8_t>& positions,
     
     std::string hand_str = (hand == HandSelection::RIGHT_HAND) ? "right" : (hand == HandSelection::LEFT_HAND) ? "left" : "both";
     ROS_INFO("Executing direct control for %s hand(s)", hand_str.c_str());
+    for (int i = 0; i < 17; ++i) {
+        finger_commands_[i] = 0;
+    }
     
     // Fill positions (indices 0-5)
     for (int i = 0; i < 6; ++i) {

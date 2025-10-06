@@ -244,5 +244,5 @@ private:
     Vector3d rZMP_;    
     std::vector<double> rightArmswingTraj_;
     std::vector<double> leftArmswingTraj_;
-    double robot_gazebo_commands[29]; 
+    double robot_gazebo_commands[29] = {}; 
 };

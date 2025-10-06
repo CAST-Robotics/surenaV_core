@@ -50,7 +50,6 @@ public:
     const std::vector<double>& getHandMotorCommands() const;
     const std::vector<double>& getHandGazeboCommands() const;
     const std::vector<double>& getFingerMotorCommands() const;
-    bool getSimulationMode() const { return simulation; }
 
 private:
     ros::Subscriber camera_data_sub;
@@ -116,7 +115,6 @@ private:
 
     double T;
     int rate;
-    bool simulation;
     bool right_state_init_;
     bool left_state_init_;
 
