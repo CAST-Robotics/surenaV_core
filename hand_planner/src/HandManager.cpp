@@ -734,10 +734,10 @@ void HandManager::hand_keyboard_callback(const std_msgs::Int32::ConstPtr& msg)
     switch (code) {
         case 'w': case 'W': dx = +0.05; break; // Forward
         case 's': case 'S': dx = -0.05; break; // Backward
-        case 'e': case 'E': dy = +0.10; break; // To the left
+        case 'a': case 'A': dy = +0.10; break; // To the left
         case 'd': case 'D': dy = -0.10; break; // To the right
-        case 'q': case 'Q': dz = +0.10; break; // Upward
-        case 'a': case 'A': dz = -0.10; break; // Downward
+        case 'u': case 'U': dz = +0.10; break; // Upward
+        case 'j': case 'J': dz = -0.10; break; // Downward
         default: return;
     }
 
@@ -798,7 +798,7 @@ bool HandManager::move_hand_keyboard_handler(hand_planner::KeyboardJog::Request 
     hand_keyboard_enabled_ = true;
     hand_keyboard_last_input_ = ros::WallTime::now();
     res.ok = true; 
-    res.message = "ready: use keyboard teleop (r/f/t/g/y/h)";
+    res.message = "ready to use keyboard teleop!";
     return true;
 }
 

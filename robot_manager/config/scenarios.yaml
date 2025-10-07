@@ -62,3 +62,37 @@ scenarios:
       blocking: true
       params:
         start: "begin"
+
+  # Scenario 3: Exhibition
+  exhibition:
+    - service: "/move_hand_single_srv"
+      blocking: true
+      params:
+        mode: "righthand"
+        ee_ini_pos: "init"
+        scenario: ["pointing"]
+        scen_count: 1
+        t_total: 4
+    - service: "/move_hand_single_srv"
+      blocking: true
+      params:
+        mode: "lefthand"
+        ee_ini_pos: "init"
+        scenario: ["shakeHands"]
+        scen_count: 1
+        t_total: 8
+    - service: "/arm_back_to_home_srv"
+      blocking: true
+      params:
+    - service: "/keyboard_walk_seq"
+      blocking: true
+      params:
+        seq: "jw"
+    - service: "/move_hand_single_srv"
+      blocking: true
+      params:
+        mode: "righthand"
+        ee_ini_pos: "init"
+        scenario: ["byebye"]
+        scen_count: 1
+        t_total: 8

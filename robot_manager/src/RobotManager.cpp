@@ -149,6 +149,75 @@ bool RobotManager::execute_step(const YAML::Node& step) {
         if (!client.call(srv)) { ROS_ERROR("Service call to %s failed.", service_name.c_str()); return false; }
         return true;
 
+    } else if (service_name == "/arm_back_to_home_srv") {
+        ros::ServiceClient client = nh_->serviceClient<hand_planner::arm_back_to_home>(service_name);
+        hand_planner::arm_back_to_home srv;
+        if (!client.call(srv)) { 
+            ROS_ERROR("Service call to %s failed.", service_name.c_str()); 
+            return false; 
+        }
+        return srv.response.success;
+
+    } else if (service_name == "/keyboard_walk_seq") {
+        ros::ServiceClient client = nh_->serviceClient<gait_planner::KeyboardWalkSeq>(service_name);
+        gait_planner::KeyboardWalkSeq srv;
+        srv.request.seq = params["seq"].as<std::string>();
+        if (!client.call(srv)) { 
+            ROS_ERROR("Service call to %s failed.", service_name.c_str()); 
+            return false; 
+        }
+        return srv.response.success;
+
+    } else if (service_name == "/finger_control_srv") {
+        ros::ServiceClient client = nh_->serviceClient<hand_planner::FingerControl>(service_name);
+        hand_planner::FingerControl srv;
+        srv.request.target_positions = params["target_positions"].as<std::vector<int64_t>>();
+        srv.request.pressure_limits = params["pressure_limits"].as<std::vector<int64_t>>();
+        srv.request.pid_kp = params["pid_kp"].as<int64_t>();
+        srv.request.pid_ki = params["pid_ki"].as<int64_t>();
+        srv.request.pid_kd = params["pid_kd"].as<int64_t>();
+        srv.request.hand_selection = params["hand_selection"].as<std::string>();
+        if (!client.call(srv)) { ROS_ERROR("Service call to %s failed.", service_name.c_str()); return false; }
+        return srv.response.success;
+
+    } else if (service_name == "/finger_scenario_srv") {
+        ros::ServiceClient client = nh_->serviceClient<hand_planner::FingerScenario>(service_name);
+        hand_planner::FingerScenario srv;
+        srv.request.scenario_name = params["scenario_name"].as<std::string>();
+        srv.request.hand_selection = params["hand_selection"].as<std::string>();
+        if (!client.call(srv)) { ROS_ERROR("Service call to %s failed.", service_name.c_str()); return false; }
+        return srv.response.success;
+
+    } else if (service_name == "/move_hand_general_srv") {
+        ros::ServiceClient client = nh_->serviceClient<hand_planner::MoveHandGeneral>(service_name);
+        hand_planner::MoveHandGeneral srv;
+        srv.request.commands = params["commands"].as<std::vector<std::string>>();
+        srv.request.go_home_on_finish = params["go_home_on_finish"].as<bool>();
+        if (!client.call(srv)) { ROS_ERROR("Service call to %s failed.", service_name.c_str()); return false; }
+        return srv.response.ok;
+
+    } else if (service_name == "/move_hand_keyboard_srv") {
+        ros::ServiceClient client = nh_->serviceClient<hand_planner::KeyboardJog>(service_name);
+        hand_planner::KeyboardJog srv;
+        if (!client.call(srv)) { ROS_ERROR("Service call to %s failed.", service_name.c_str()); return false; }
+        return srv.response.ok;
+
+    } else if (service_name == "/move_hand_relative_srv") {
+        ros::ServiceClient client = nh_->serviceClient<hand_planner::PickAndMove>(service_name);
+        hand_planner::PickAndMove srv;
+        srv.request.axes = params["axes"].as<std::vector<std::string>>();
+        srv.request.deltas = params["deltas"].as<std::vector<double>>();
+        srv.request.durations = params["durations"].as<std::vector<double>>();
+        if (!client.call(srv)) { ROS_ERROR("Service call to %s failed.", service_name.c_str()); return false; }
+        return srv.response.ok;
+
+    } else if (service_name == "/write_string_srv") {
+        ros::ServiceClient client = nh_->serviceClient<hand_planner::WriteString>(service_name);
+        hand_planner::WriteString srv;
+        srv.request.data = params["data"].as<std::string>();
+        if (!client.call(srv)) { ROS_ERROR("Service call to %s failed.", service_name.c_str()); return false; }
+        return srv.response.success;
+
     } else if (service_name == "/joint_command") {
         ros::ServiceClient client = nh_->serviceClient<gait_planner::command>(service_name);
         gait_planner::command srv;
