@@ -878,8 +878,6 @@ void GaitManager::keyboardHandler(const std_msgs::Int32 &msg)
 
     int command = msg.data;
 
-    double com_z = robot->getCOMZ();
-
     // if (command == 101) // e
     // {
     //     trajSize_ = robot->changeStep();
@@ -999,7 +997,7 @@ void GaitManager::keyboardHandler(const std_msgs::Int32 &msg)
             break;
 
         case 117: // u: comming up
-            init_com_pos[2] = com_z;
+            init_com_pos[2] = COM_height;
             final_com_pos[2] = 0.71;
             robot->generalTrajGen(dt, 2, init_com_pos, final_com_pos, init_com_orient, final_com_orient,
                           init_lankle_pos, final_lankle_pos, init_lankle_orient, final_lankle_orient,
@@ -1104,6 +1102,8 @@ bool GaitManager::keyboardWalk(std_srvs::Empty::Request &req, std_srvs::Empty::R
                 cout << "Node was shut down due to Ankle Collision!" << endl;
                 return false;
             }
+
+            realCoM_z = robot->getCOMZ();
 
             double right_armswing_rad = 0.0, left_armswing_rad = 0.0;
             robot->getArmAnglesForIteration(iter, right_armswing_rad, left_armswing_rad);
@@ -1380,6 +1380,7 @@ bool GaitManager::keyboardWalkSeq(gait_planner::KeyboardWalkSeq::Request &req,
                 robot->getJointAngs(iter, config, jnt_vel, right_ft, left_ft, right_bump,
                                     left_bump, gyro, acc, jnt_command, status);
                 if (status != 0) return false;
+                realCoM_z = robot->getCOMZ();
 
                 double r_arm=0.0, l_arm=0.0;
                 robot->getArmAnglesForIteration(iter, r_arm, l_arm);

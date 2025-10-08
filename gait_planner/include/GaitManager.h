@@ -118,6 +118,7 @@ private:
     bool collision_;
     int bumpOrder_[8];
     mutable std::mutex command_mutex_;
+    double realCoM_z;
 
     // Ankle Mechanism Parameters
 

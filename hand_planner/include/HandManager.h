@@ -118,7 +118,9 @@ private:
     bool right_state_init_;
     bool left_state_init_;
 
-    bool hand_keyboard_enabled_ =false;
+    bool hand_keyboard_enabled_ = false;
+    bool isHandKeyboardTrajectoryEnabled = false;
+    bool isHandKeyboardActive = false;
     int encoderResolution[2];
     int harmonicRatio[4];
     vector<int> pitch_range, roll_range, yaw_range;

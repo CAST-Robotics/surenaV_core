@@ -725,11 +725,21 @@ bool HandManager::move_hand_relative_handler(hand_planner::PickAndMove::Request 
 
 void HandManager::hand_keyboard_callback(const std_msgs::Int32::ConstPtr& msg)
 {
-    if (!hand_keyboard_enabled_) return;
+    if (!hand_keyboard_enabled_ || !isHandKeyboardTrajectoryEnabled) return;
+    
     const double STEP_T = 1.0;
     const double MAX_DX = 0.08, MAX_DYZ = 0.30;
 
     int code = msg->data;
+    
+    // Handle ESC key to stop the service
+    if (code == 27) { // ESC key
+        isHandKeyboardTrajectoryEnabled = false;
+        isHandKeyboardActive = false;
+        ROS_INFO("Hand keyboard control stopped by ESC key");
+        return;
+    }
+    
     double dx=0, dy=0, dz=0;
     switch (code) {
         case 'w': case 'W': dx = +0.05; break; // Forward
@@ -789,16 +799,36 @@ bool HandManager::move_hand_keyboard_handler(hand_planner::KeyboardJog::Request 
     };
 
     if (!approachViaOneMid(hand_func_R, coef_generator, q, mid, goal, Rg, 3.0, 3.0, T, pub)) {
-        res.ok=false; res.message="approach failed";
+        res.ok=false; 
+        res.message="approach failed";
         return true;
     }
 
     q_right_state_ = q;
 
+    // Set up keyboard control state
     hand_keyboard_enabled_ = true;
+    isHandKeyboardActive = true;
+    isHandKeyboardTrajectoryEnabled = true;
     hand_keyboard_last_input_ = ros::WallTime::now();
+    
+    int rate = 200;
+    ros::Rate rate_(rate);
+    
+    while (isHandKeyboardActive)
+    {
+        // Process any pending keyboard commands
+        ros::spinOnce();
+        rate_.sleep();
+    }
+    
+    // Clean up
+    hand_keyboard_enabled_ = false;
+    isHandKeyboardActive = false;
+    isHandKeyboardTrajectoryEnabled = false;
+    
     res.ok = true; 
-    res.message = "ready to use keyboard teleop!";
+    res.message = "hand keyboard control stopped";
     return true;
 }
 
