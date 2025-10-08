@@ -29,7 +29,7 @@ void GazeboCallback(const std_msgs::Float64MultiArray::ConstPtr& msg) {
     std::vector<int> right_arm_indices = {12, 13, 14, 15, 23, 24, 25};
     for (size_t i = 0; i < right_arm_pubs.size(); ++i) {
         std_msgs::Float64 cmd;
-        cmd.data = (right_arm_indices[i]==23) ? msg->data[right_arm_indices[i]]+1.57/3 : msg->data[right_arm_indices[i]];
+        cmd.data = msg->data[right_arm_indices[i]];
         right_arm_pubs[i].publish(cmd);
     }
     // Left Arm 

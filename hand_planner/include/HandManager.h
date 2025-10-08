@@ -139,7 +139,7 @@ private:
 
     MatrixXd scenario_target(HandType type, string scenario, int i, VectorXd ee_pos, string ee_ini_pos);
     VectorXd reach_target(S5_hand& hand_model, VectorXd& q_arm, MatrixXd& qref_arm, double& sum_arm, VectorXd& q_init_arm, MatrixXd targets, string scenario, int M);
-
+    Vector2d head_follow_hand(HandType type, const VectorXd& q_arm);
 
     bool single_hand(hand_planner::move_hand_single::Request &req, hand_planner::move_hand_single::Response &res);
     bool both_hands(hand_planner::move_hand_both::Request &req, hand_planner::move_hand_both::Response &res);

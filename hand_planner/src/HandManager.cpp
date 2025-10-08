@@ -171,9 +171,9 @@ MatrixXd HandManager::scenario_target(HandType type, string scenario, int i, Vec
         double rot_angle = (type == RIGHT) ? 60 * M_PI / 180 : -60 * M_PI / 180;
         R_target = hand_func.rot(2, -80 * M_PI / 180, 3) * hand_func.rot(1, rot_angle, 3);
     } else if (scenario == "byebye") {
-        r_middle = (type == RIGHT) ? Vector3d(0.35, -0.2, -0.15) : Vector3d(0.35, 0.2, -0.15);
-        r_target = (type == RIGHT) ? Vector3d(0.3, -0.1, 0.22) : Vector3d(0.3, 0.1, 0.22);
-        R_target = hand_func.rot(3, 90 * M_PI / 180, 3) * hand_func.rot( (type == RIGHT ? 1 : 2), -180 * M_PI / 180, 3);
+        r_middle = (type == RIGHT) ? Vector3d(0.35, -0.1, -0.15) : Vector3d(0.35, 0.2, -0.15);
+        r_target = (type == RIGHT) ? Vector3d(0.3, 0, 0.22) : Vector3d(0.3, 0.1, 0.22);
+        R_target = hand_func.rot(3, 90 * M_PI / 180, 3) * hand_func.rot(1, -160 * M_PI / 180, 3);
     } else if (scenario == "punching") {
         r_middle = (type == RIGHT) ? Vector3d(0.15, -0.1, -0.1) : Vector3d(0.15, 0.1, -0.1);
         r_target = (type == RIGHT) ? Vector3d(0.35, 0.2, 0.1) : Vector3d(0.35, -0.2, 0.1);
@@ -266,6 +266,39 @@ VectorXd HandManager::reach_target(S5_hand& hand_model, VectorXd& q_arm, MatrixX
     sum_arm += total_time;
     hand_model.HO_FK_palm(q_arm);
     return hand_model.r_palm;
+}
+
+Vector2d HandManager::head_follow_hand(HandType type, const VectorXd& q_arm)
+{
+    double dx = 0.00;
+    double dy = (type==RIGHT)? -0.2 : 0.2;
+    double dz = -0.25;
+
+    static const double YAW_MIN=-60.0*M_PI/180.0, YAW_MAX=60.0*M_PI/180.0;
+    static const double PITCH_MIN=-28.0*M_PI/180.0, PITCH_MAX=28.0*M_PI/180.0;
+
+    auto wrap=[](double a){ while(a> M_PI)a-=2*M_PI; while(a<-M_PI)a+=2*M_PI; return a; };
+    auto clamp=[](double v,double lo,double hi){ return std::max(lo,std::min(hi,v)); };
+
+    if (type==RIGHT) hand_func_R.HO_FK_palm(q_arm);
+    else             hand_func_L.HO_FK_palm(q_arm);
+
+    const Eigen::Vector3d p_sh = (type==RIGHT)? hand_func_R.r_palm : hand_func_L.r_palm;
+    Eigen::Vector3d p_neck = p_sh + Eigen::Vector3d(dx,dy,dz);
+
+    double yaw_des   = std::atan2(p_neck.y(),  p_neck.x());
+    double pitch_des = std::atan2(-p_neck.z(), std::hypot(p_neck.y(), p_neck.x()));
+
+    double e_yaw   = wrap(yaw_des   - h_yaw);
+    double e_pitch = wrap(pitch_des - h_pitch);
+
+    h_yaw   += -Ky*e_yaw;
+    h_pitch += Kp*e_pitch;
+
+    h_yaw   = clamp(h_yaw,   YAW_MIN,   YAW_MAX);
+    h_pitch = clamp(h_pitch, PITCH_MIN, PITCH_MAX);
+
+    return Vector2d(h_yaw, h_pitch);
 }
 
 void HandManager::publishMotorData(const VectorXd& q_rad_right, const VectorXd& q_rad_left, const Vector3d& head_angles) {
@@ -406,7 +439,11 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             Eigen::VectorXd q_send = q_abs;
             q_send.head(4) = q_abs.head(4) - q_right_baseline_.head(4);
             Eigen::VectorXd q_left = Eigen::VectorXd::Zero(7);
-            Eigen::Vector3d head_angles(0,0,0);
+
+            // Eigen::Vector3d head_angles(0,0,0);
+            head_follow_hand(RIGHT, q_send);
+            Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
+
             publishMotorData(q_send, q_left, head_angles);
             ros::spinOnce();
             rate_.sleep();
@@ -445,7 +482,11 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             q_send_l.head(4) = q_abs_l.head(4) - q_left_baseline_.head(4);
 
             Eigen::VectorXd q_right = Eigen::VectorXd::Zero(7);
-            Eigen::Vector3d head_angles(0,0,0);
+
+            // Eigen::Vector3d head_angles(0,0,0);
+            head_follow_hand(LEFT, q_send_l);
+            Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
+
             publishMotorData(q_right, q_send_l, head_angles);
             ros::spinOnce();
             rate_.sleep();
@@ -759,7 +800,10 @@ void HandManager::hand_keyboard_callback(const std_msgs::Int32::ConstPtr& msg)
 
     auto pub = [&](const Eigen::VectorXd& qr){
         Eigen::VectorXd ql = Eigen::VectorXd::Zero(7);
-        publishMotorData(qr, ql, Eigen::Vector3d(0,0,0));
+        // Eigen::Vector3d head_angles(0,0,0);
+        head_follow_hand(RIGHT, qr);
+        Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
+        publishMotorData(qr, ql, head_angles);
     };
 
     if (!moveRelative(hand_func_R, coef_generator, q,
@@ -788,7 +832,10 @@ bool HandManager::move_hand_keyboard_handler(hand_planner::KeyboardJog::Request 
 
     auto pub = [&](const Eigen::VectorXd& qr){
         Eigen::VectorXd ql = Eigen::VectorXd::Zero(7);
-        publishMotorData(qr, ql, Eigen::Vector3d(0,0,0));
+        // Eigen::Vector3d head_angles(0,0,0);
+        head_follow_hand(RIGHT, qr);
+        Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
+        publishMotorData(qr, ql, head_angles);
     };
 
     if (!approachViaOneMid(hand_func_R, coef_generator, q, mid, goal, Rg, 3.0, 3.0, T, pub)) {
