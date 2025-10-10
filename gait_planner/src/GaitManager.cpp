@@ -899,8 +899,8 @@ void GaitManager::keyboardHandler(const std_msgs::Int32 &msg)
     {
         switch (command)
         {
-        case 119: // w: move forward 
-            step_count = 10;
+        case 119: // w: move forward with arm swing
+            step_count = 4;
             step_length = 0.16;
             theta = 0.0;
             robot->trajGen(step_count, t_step, alpha, t_double_support, COM_height, step_length, 
@@ -914,6 +914,19 @@ void GaitManager::keyboardHandler(const std_msgs::Int32 &msg)
 
             isKeyboardTrajectoryEnabled = false;
             break;
+
+        case 116: // t: move forward without arm swing
+            step_count = 4;
+            step_length = 0.16;
+            theta = 0.0;
+            robot->trajGen(step_count, t_step, alpha, t_double_support, COM_height, step_length, 
+                           step_width, dt, theta, ankle_height, step_height, slope, offset, is_config);
+            // trajSize_ = robot->OnlineDCMTrajGen(step_count, t_step, alpha, t_double_support, COM_height, step_length, 
+            //                                     step_width, dt, theta, ankle_height, step_height, slope, offset, is_config);
+
+            isKeyboardTrajectoryEnabled = false;
+            break;
+
 
         case 115: // s: move backward
             step_count = 2;
@@ -1285,12 +1298,17 @@ bool GaitManager::keyboardWalkSeq(gait_planner::KeyboardWalkSeq::Request &req,
 
     auto gen_from_key = [&](char c)->bool {
         switch (c) {
-            case 'w': case 'W': // w: move forward 
+            case 'w': case 'W': // w: move forward with arm swing
                 step_count = 4; step_length = 0.16; theta = 0.0;
                 robot->trajGen(step_count, t_step, alpha, t_double_support, COM_height, step_length,
                                step_width, dt, theta, ankle_height, step_height, slope, offset, is_config);
                 { double hand_swing_angle_deg = 20.0;
                   robot->handMotion(t_step, step_count, hand_swing_angle_deg, dt, false, false); }
+                return true;
+            case 't': case 'T': // t: move forward without arm swing 
+                step_count = 4; step_length = 0.16; theta = 0.0;
+                robot->trajGen(step_count, t_step, alpha, t_double_support, COM_height, step_length,
+                               step_width, dt, theta, ankle_height, step_height, slope, offset, is_config);
                 return true;
             case 's': case 'S': // s: move backward
                 step_count = 2; step_length = -0.15; theta = 0.0;

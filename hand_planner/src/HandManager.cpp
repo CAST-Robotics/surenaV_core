@@ -975,9 +975,7 @@ bool HandManager::arm_back_to_home_handler(hand_planner::arm_back_to_home::Reque
     q_target_l(6) = q_l(6);
 
     // Params
-    const int NUM_ARM_JOINTS_TO_HOME = 5;
-    const double FIXED_HOME_DURATION = 15.0;
-    double segment_duration = FIXED_HOME_DURATION / NUM_ARM_JOINTS_TO_HOME;
+    double segment_duration = 6;
     if (segment_duration <= 0.0) segment_duration = T;
     int M_segment = static_cast<int>(segment_duration / T);
     if (M_segment == 0) M_segment = 1;
@@ -994,17 +992,38 @@ bool HandManager::arm_back_to_home_handler(hand_planner::arm_back_to_home::Reque
         publish_trigger_pub_.publish(std_msgs::Empty());
     };
 
-    for (int joint_idx = NUM_ARM_JOINTS_TO_HOME - 1; joint_idx >= 0; --joint_idx) {
-        double start_r = q_work_r(joint_idx);
-        double end_r   = q_target_r(joint_idx);
-        double start_l = q_work_l(joint_idx);
-        double end_l   = q_target_l(joint_idx);
+    // Move motor 5 (index 4) back to home first 
+    {
+        double start_r = q_work_r(2);
+        double end_r   = q_target_r(2);
+        double start_l = q_work_l(2);
+        double end_l   = q_target_l(2);
 
         for (int step = 0; step <= M_segment; ++step) {
             double a = (M_segment > 0) ? static_cast<double>(step)/M_segment : 1.0;
-            q_work_r(joint_idx) = start_r + (end_r - start_r)*a;
-            q_work_l(joint_idx) = start_l + (end_l - start_l)*a;
+            q_work_r(2) = start_r + (end_r - start_r)*a;
+            q_work_l(2) = start_l + (end_l - start_l)*a;
             pub(q_work_r,q_work_l);
+            ros::spinOnce();
+            rate_.sleep();
+        }
+    }
+
+    // Move motors 0–3 together to home
+    {
+        Eigen::VectorXd start_r = q_work_r.head(5);
+        Eigen::VectorXd end_r   = q_target_r.head(5);
+        Eigen::VectorXd start_l = q_work_l.head(5);
+        Eigen::VectorXd end_l   = q_target_l.head(5);
+
+        for (int step = 0; step <= M_segment; ++step) {
+            double a = (M_segment > 0) ? static_cast<double>(step)/M_segment : 1.0;
+            for (int j = 0; j < 5; ++j) {
+                if (j == 2) continue; // skip motor 2
+                q_work_r(j) = start_r(j) + (end_r(j) - start_r(j)) * a;
+                q_work_l(j) = start_l(j) + (end_l(j) - start_l(j)) * a;
+            }
+            pub(q_work_r, q_work_l);
             ros::spinOnce();
             rate_.sleep();
         }
