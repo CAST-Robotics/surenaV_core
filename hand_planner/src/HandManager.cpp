@@ -57,26 +57,28 @@ HandManager::HandManager(ros::NodeHandle *n) :
     left_state_init_ = true;
 
     // ROS Communication Setup
-    trajectory_data_pub = n->advertise<std_msgs::Int32MultiArray>("jointdata/qc", 100);
-    gazeboJointStatePub_ = n->advertise<std_msgs::Float64MultiArray>("/joint_angles_gazebo", 100);
-    camera_data_sub = n->subscribe("/detection_info", 1, &HandManager::object_detect_callback, this);
-    joint_qc_sub = n->subscribe("jointdata/qc", 100, &HandManager::joint_qc_callback, this);
-    teleoperation_data_sub = n->subscribe("teleoperation/angles", 100, &HandManager::teleoperation_callback, this);
-    micArray_data_sub = n->subscribe("micarray/angle", 100, &HandManager::micArray_callback, this);
-    move_hand_single_service = n->advertiseService("move_hand_single_srv", &HandManager::single_hand, this);
-    move_hand_both_service = n->advertiseService("move_hand_both_srv", &HandManager::both_hands, this);
-    grip_online_service = n->advertiseService("grip_online_srv", &HandManager::grip_online, this);
-    set_target_class_service = n->advertiseService("set_target_class_srv", &HandManager::setTargetClassService, this);
-    head_track_service = n->advertiseService("head_track_srv", &HandManager::head_track_handler, this);
-    teleoperation_service = n->advertiseService("teleoperation_srv", &HandManager::teleoperation_handler, this);
-    write_string_service_        = n->advertiseService("write_string_srv",        &HandManager::write_string_handler, this);
-    move_hand_relative_service_  = n->advertiseService("move_hand_relative_srv",  &HandManager::move_hand_relative_handler, this);
-    move_hand_keyboard_service_  = n->advertiseService("move_hand_keyboard_srv",  &HandManager::move_hand_keyboard_handler, this);
-    move_hand_general_service_   = n->advertiseService("move_hand_general_srv",   &HandManager::move_hand_general_handler, this);
+    trajectory_data_pub          = n->advertise<std_msgs::Int32MultiArray>("jointdata/qc", 100);
+    gazeboJointStatePub_         = n->advertise<std_msgs::Float64MultiArray>("/joint_angles_gazebo", 100);
+    camera_data_sub              = n->subscribe("/detection_info", 1, &HandManager::object_detect_callback, this);
+    joint_qc_sub                 = n->subscribe("jointdata/qc", 100, &HandManager::joint_qc_callback, this);
+    teleoperation_data_sub       = n->subscribe("teleoperation/angles", 100, &HandManager::teleoperation_callback, this);
+    micArray_data_sub            = n->subscribe("micarray/angle", 100, &HandManager::micArray_callback, this);
+    hall_sensor_sub_             = n->subscribe("/surena/hall_state", 1, &HandManager::hallSensorCallback, this);
     hand_keyboard_sub_           = n->subscribe("/keyboard_command", 10, &HandManager::hand_keyboard_callback, this);
-    arm_back_to_home_service_    = n->advertiseService("arm_back_to_home_srv",    &HandManager::arm_back_to_home_handler, this);
-    finger_control_service_  = n->advertiseService("finger_control_srv", &HandManager::fingerControlService, this);
-    finger_scenario_service_ = n->advertiseService("finger_scenario_srv", &HandManager::fingerScenarioService, this);
+    move_hand_single_service     = n->advertiseService("move_hand_single_srv", &HandManager::single_hand, this);
+    move_hand_both_service       = n->advertiseService("move_hand_both_srv", &HandManager::both_hands, this);
+    grip_online_service          = n->advertiseService("grip_online_srv", &HandManager::grip_online, this);
+    set_target_class_service     = n->advertiseService("set_target_class_srv", &HandManager::setTargetClassService, this);
+    head_track_service           = n->advertiseService("head_track_srv", &HandManager::head_track_handler, this);
+    teleoperation_service        = n->advertiseService("teleoperation_srv", &HandManager::teleoperation_handler, this);
+    write_string_service_        = n->advertiseService("write_string_srv", &HandManager::write_string_handler, this);
+    move_hand_relative_service_  = n->advertiseService("move_hand_relative_srv", &HandManager::move_hand_relative_handler, this);
+    move_hand_keyboard_service_  = n->advertiseService("move_hand_keyboard_srv", &HandManager::move_hand_keyboard_handler, this);
+    move_hand_general_service_   = n->advertiseService("move_hand_general_srv", &HandManager::move_hand_general_handler, this);
+    arm_back_to_home_service_    = n->advertiseService("arm_back_to_home_srv", &HandManager::arm_back_to_home_handler, this);
+    finger_control_service_      = n->advertiseService("finger_control_srv", &HandManager::fingerControlService, this);
+    finger_scenario_service_     = n->advertiseService("finger_scenario_srv", &HandManager::fingerScenarioService, this);
+    arm_home_service_            = n->advertiseService("arm_home_service", &HandManager::arm_home_service_handler, this);
 }
 
 // --- Object Detection Callback Implementations ---
@@ -148,6 +150,33 @@ void HandManager::micArray_callback(const std_msgs::Float64 &msg) {
         if (all_equal) {
             micArray_theta = (msg.data - 90) * M_PI / 180;
         }
+    }
+}
+
+void HandManager::hallSensorCallback(const std_msgs::Int32& msg){
+    if (!(msg.data &(1<<8))){      // Sensor 1: RIght Elbow
+        hall_sensors_state[0] = 1;
+    } 
+    if (!(msg.data &(1<<9))) {     // Sensor 2: Right Yaw
+        hall_sensors_state[1] = 1;
+    }  
+    if (!(msg.data &(1<<10))) {    // Sensor 3: Right Roll
+        hall_sensors_state[2] = 1;
+    }  
+    if (!(msg.data &(1<<11))) {    // Sensor 4: Right Pitch
+        hall_sensors_state[3] = 1;
+    }  
+    if (!(msg.data &(1<<12))) {    // Sensor 5: Left Elbow
+        hall_sensors_state[4] = 1;
+    }  
+    if (!(msg.data &(1<<13))) {    // Sensor 6: Left Yaw
+        hall_sensors_state[5] = 1;
+    }  
+    if (!(msg.data &(1<<14))) {    // Sensor 7: Left Roll
+        hall_sensors_state[6] = 1;
+    }  
+    if (!(msg.data &(1<<3))) {     // Sensor 8: Left Pitch
+        hall_sensors_state[7] = 1;
     }
 }
 
@@ -355,9 +384,9 @@ void HandManager::publishMotorData(const VectorXd& q_rad_right, const VectorXd& 
             trajectory_data.data.push_back(q_motor[i]); 
         }
         trajectory_data_pub.publish(trajectory_data);
-        // cout << "robot_right" << ", " << q_motor[12] << ", " << q_motor[13] << ", " << q_motor[14] << ", " << q_motor[15] << ", " << q_motor[23] << ", " << q_motor[24] << ", " << q_motor[25] << endl;
-        // cout << "robot_left" << ", " << q_motor[16] << ", " << q_motor[17] << ", " << q_motor[18] << ", " << q_motor[19] << ", " << q_motor[26] << ", " << q_motor[27] << ", " << q_motor[28] << endl;
         last_q_motor = q_motor;
+
+        // cout << q_motor[12] << ", " << q_motor[13] << ", " << q_motor[14] << ", " << q_motor[15] << ", " << q_motor[16] << ", " << q_motor[17] << ", " << q_motor[18] << ", " << q_motor[19] << ", " << q_motor[20] << ", " << q_motor[21] << ", " << q_motor[22] << ", " << q_motor[23] << ", " << q_motor[24] << ", " << q_motor[25] << ", " << q_motor[26] << ", " << q_motor[27] << ", " << q_motor[28] << endl;
         
     } else { // simulation
         // Right hand joints
@@ -393,7 +422,6 @@ void HandManager::publishMotorData(const VectorXd& q_rad_right, const VectorXd& 
             joint_angles_gazebo_.data.push_back(q_gazebo[i]);
         }
         gazeboJointStatePub_.publish(joint_angles_gazebo_);
-        // cout << "gazebo_sim" << ", " << q_gazebo[12] << ", " << q_gazebo[13] << ", " << q_gazebo[14] << ", " << q_gazebo[15] << ", " << q_gazebo[23] << ", " << q_gazebo[24] << ", " << q_gazebo[25] << endl;
     }
 }
 
@@ -1032,6 +1060,204 @@ bool HandManager::arm_back_to_home_handler(hand_planner::arm_back_to_home::Reque
     q_left_state_  = q_work_l;
     res.success = true;
     return true;
+}
+
+bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res) {
+    ros::Rate rate_(rate);
+    
+    // Reset hall sensor states
+    for (int i = 0; i < 8; i++) {
+        hall_sensors_state[i] = 0;
+    }
+    
+    // Define arm joint mappings to hall sensors
+    const int RIGHT_ELBOW_SENSOR = 0;
+    const int RIGHT_YAW_SENSOR = 1;
+    const int RIGHT_ROLL_SENSOR = 2;
+    const int RIGHT_PITCH_SENSOR = 3;
+    const int LEFT_ELBOW_SENSOR = 4;
+    const int LEFT_YAW_SENSOR = 5;
+    const int LEFT_ROLL_SENSOR = 6;
+    const int LEFT_PITCH_SENSOR = 7;
+    
+    // Speed parameters
+    const double HOMING_SPEED = 0.1; // rad/s
+    const double TIME_STEP = T;      // 0.005s
+    
+    // Initialize joint positions (default to zero)
+    Eigen::VectorXd q_right_current(7);
+    Eigen::VectorXd q_left_current(7);
+    q_right_current.setZero();
+    q_left_current.setZero();
+    
+    // Initialize baseline positions to zero - will be set after homing
+    q_right_baseline_.resize(7);
+    q_left_baseline_.resize(7);
+    q_right_baseline_.setZero();
+    q_left_baseline_.setZero();
+    
+    // Homing sequence states
+    enum HomingState {
+        ROLL_OPENING,      // Step 1: Open roll joints for safety
+        ELBOW_HOMING,      // Step 2: Home elbow joints using hall sensors
+        YAW_HOMING,        // Step 3: Home yaw joints using hall sensors
+        PITCH_HOMING,      // Step 4: Home pitch joints using hall sensors
+        ROLL_HOMING,       // Step 5: Home roll joints using hall sensors
+        COMPLETED          // All joints homed
+    };
+    
+    HomingState right_state = ROLL_OPENING;
+    HomingState left_state = ROLL_OPENING;
+    
+    // Roll opening parameters
+    const double ROLL_OPEN_ANGLE = 0.1; // 0.1 rad
+    bool right_roll_opened = false;
+    bool left_roll_opened = false;
+    
+    // Joint direction multipliers
+    const double RIGHT_PITCH_DIR = -1;  // negative for moving forward
+    const double RIGHT_ROLL_DIR = -1;   // negative for moving away from robot's trunk
+    const double RIGHT_YAW_DIR = 1;     // positive for moving through the body
+    const double RIGHT_ELBOW_DIR = -1;  // negative for collapsed direction
+    
+    const double LEFT_PITCH_DIR = -1;   // negative for moving forward
+    const double LEFT_ROLL_DIR = 1;     // positive for moving away from robot's trunk
+    const double LEFT_YAW_DIR = -1;     // negative for moving through the body
+    const double LEFT_ELBOW_DIR = -1;   // negative for collapsed direction
+    
+    int timeout_counter = 0;
+    const int MAX_TIMEOUT = 4000; // 20 seconds at 200Hz
+    
+    ROS_INFO("Starting homing sequence for both arms...");
+    
+    while ((right_state != COMPLETED || left_state != COMPLETED) && timeout_counter < MAX_TIMEOUT && ros::ok()) {
+        
+        // Right arm homing sequence
+        if (right_state == ROLL_OPENING) {
+            if (!right_roll_opened) {
+                q_right_current(1) += ROLL_OPEN_ANGLE * RIGHT_ROLL_DIR; // arm_roll joint
+                right_roll_opened = true;
+                ROS_INFO("Right arm: Opening roll joint by 0.1 rad");
+            }
+            right_state = ELBOW_HOMING;
+        }
+        else if (right_state == ELBOW_HOMING) {
+            if (hall_sensors_state[RIGHT_ELBOW_SENSOR] == 0) {
+                double joint_speed = HOMING_SPEED * TIME_STEP * (-RIGHT_ELBOW_DIR);
+                q_right_current(3) += joint_speed; // elbow joint
+            } else {
+                ROS_INFO("Right arm: Elbow joint homed");
+                right_state = YAW_HOMING;
+            }
+        }
+        else if (right_state == YAW_HOMING) {
+            if (hall_sensors_state[RIGHT_YAW_SENSOR] == 0) {
+                double joint_speed = HOMING_SPEED * TIME_STEP * (-RIGHT_YAW_DIR);
+                q_right_current(2) += joint_speed; // arm_yaw joint
+            } else {
+                ROS_INFO("Right arm: Yaw joint homed");
+                right_state = PITCH_HOMING;
+            }
+        }
+        else if (right_state == PITCH_HOMING) {
+            if (hall_sensors_state[RIGHT_PITCH_SENSOR] == 0) {
+                double joint_speed = HOMING_SPEED * TIME_STEP * (-RIGHT_PITCH_DIR);
+                q_right_current(0) += joint_speed; // arm_pitch joint
+            } else {
+                ROS_INFO("Right arm: Pitch joint homed");
+                right_state = ROLL_HOMING;
+            }
+        }
+        else if (right_state == ROLL_HOMING) {
+            if (hall_sensors_state[RIGHT_ROLL_SENSOR] == 0) {
+                double joint_speed = HOMING_SPEED * TIME_STEP * (-RIGHT_ROLL_DIR);
+                q_right_current(1) += joint_speed; // arm_roll joint
+            } else {
+                ROS_INFO("Right arm: Roll joint homed");
+                right_state = COMPLETED;
+            }
+        }
+        
+        // Left arm homing sequence
+        if (left_state == ROLL_OPENING) {
+            if (!left_roll_opened) {
+                q_left_current(1) += ROLL_OPEN_ANGLE * LEFT_ROLL_DIR; // arm_roll joint
+                left_roll_opened = true;
+                ROS_INFO("Left arm: Opening roll joint by 0.1 rad");
+            }
+            left_state = ELBOW_HOMING;
+        }
+        else if (left_state == ELBOW_HOMING) {
+            if (hall_sensors_state[LEFT_ELBOW_SENSOR] == 0) {
+                double joint_speed = HOMING_SPEED * TIME_STEP * (-LEFT_ELBOW_DIR);
+                q_left_current(3) += joint_speed; // elbow joint
+            } else {
+                ROS_INFO("Left arm: Elbow joint homed");
+                left_state = YAW_HOMING;
+            }
+        }
+        else if (left_state == YAW_HOMING) {
+            if (hall_sensors_state[LEFT_YAW_SENSOR] == 0) {
+                double joint_speed = HOMING_SPEED * TIME_STEP * (-LEFT_YAW_DIR);
+                q_left_current(2) += joint_speed; // arm_yaw joint
+            } else {
+                ROS_INFO("Left arm: Yaw joint homed");
+                left_state = PITCH_HOMING;
+            }
+        }
+        else if (left_state == PITCH_HOMING) {
+            if (hall_sensors_state[LEFT_PITCH_SENSOR] == 0) {
+                double joint_speed = HOMING_SPEED * TIME_STEP * (-LEFT_PITCH_DIR);
+                q_left_current(0) += joint_speed; // arm_pitch joint
+            } else {
+                ROS_INFO("Left arm: Pitch joint homed");
+                left_state = ROLL_HOMING;
+            }
+        }
+        else if (left_state == ROLL_HOMING) {
+            if (hall_sensors_state[LEFT_ROLL_SENSOR] == 0) {
+                double joint_speed = HOMING_SPEED * TIME_STEP * (-LEFT_ROLL_DIR);
+                q_left_current(1) += joint_speed; // arm_roll joint
+            } else {
+                ROS_INFO("Left arm: Roll joint homed");
+                left_state = COMPLETED;
+            }
+        }
+        
+        // Publish motor commands
+        Eigen::VectorXd q_send_right = q_right_current;
+        q_send_right.head(4) = q_right_current.head(4) - q_right_baseline_.head(4);
+        
+        Eigen::VectorXd q_send_left = q_left_current;
+        q_send_left.head(4) = q_left_current.head(4) - q_left_baseline_.head(4);
+        
+        publishMotorData(q_send_right, q_send_left, Eigen::Vector3d(0, 0, 0));
+        
+        ros::spinOnce();
+        rate_.sleep();
+        timeout_counter++;
+        
+    }
+    
+    if (right_state == COMPLETED && left_state == COMPLETED) {
+        ROS_INFO("Arm homing completed successfully - all joints homed");
+        
+        // Store the final homed positions as the new baseline and state
+        q_right_baseline_ = q_right_current;
+        q_left_baseline_ = q_left_current;
+        q_right_state_ = q_right_current;
+        q_left_state_ = q_left_current;
+        
+        // Reset hall sensor states for next use
+        for (int i = 0; i < 8; i++) {
+            hall_sensors_state[i] = 0;
+        }
+        
+        return true;
+    } else {
+        ROS_ERROR("Arm homing failed - timeout reached before all joints homed");
+        return false;
+    }
 }
 
 bool HandManager::fingerControlService(hand_planner::FingerControl::Request &req, hand_planner::FingerControl::Response &res) {
