@@ -21,6 +21,12 @@ enum HandType {
     LEFT
 };
 
+struct MotorParams {
+    double x0, y0, z0;
+    double c1, r1;
+    double x3, y3, z3;
+};
+
 class S5_hand {
 public:
     // --- CONSTRUCTOR ---
@@ -75,6 +81,10 @@ public:
 
     // Utility & Transformation Functions
     double toRad(double d);
+    double deg2rad(double d);
+    double rad2deg(double r);
+    Matrix3d Rx(double t) const;
+    Matrix3d Ry(double t) const;
     MatrixXd rot(int axis, double q, int dim);
     MatrixXd trans(int axis, double d);
     MatrixXd trans(Vector3d d);
@@ -84,6 +94,7 @@ public:
     // Wrist Inverse Kinematics (These are mechanism-specific)
     double wrist_left_calc(double alpha, double beta);
     double wrist_right_calc(double alpha, double beta);
+    Vector2d solve_wrist(double pitch_deg, double roll_deg);
 
     // Simulation and Hardware Interface
     double move2pose(double max, double t_local, double T_start, double T_end);
@@ -98,6 +109,7 @@ private:
     double wrist_clip_value;
     double palm_position_power = 1e6;
     double palm_orientation_power = 1e6;
+    MotorParams motor_params[2];
 
     // Internal Kinematic Parameters
     MatrixXd R1_fix_shd, R2_fix_shd, R1_ra, R2_ra, R3_ra;

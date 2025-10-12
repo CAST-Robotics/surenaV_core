@@ -369,7 +369,10 @@ void HandManager::publishMotorData(const VectorXd& q_rad_right, const VectorXd& 
                             (((hand_func_R.wrist_right_calc(q_rad_right(5), q_rad_right(6))) - (wrist_right_range[0])) / (wrist_right_range[1] - (wrist_right_range[0]))));
         q_motor[25] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
                             (((hand_func_R.wrist_left_calc(q_rad_right(5), q_rad_right(6))) - wrist_left_range[0]) / (wrist_left_range[1] - wrist_left_range[0])));
-    
+        
+        Vector2d wrist_res = hand_func_R.solve_wrist(q_rad_right(5)*180/M_PI, q_rad_right(6)*180/M_PI); // (motor 25 (A), motor 24 (B))
+        cout << q_rad_right(5)*180/M_PI << ", " << q_rad_right(6)*180/M_PI << ", " << q_motor[24] << ", " << q_motor[25] << ", " << int(wrist_res(0)) << ", " << int(wrist_res(1)) << endl;
+
         // Wrist calculations for left hand (indices 26-28)
         q_motor[26] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
                             (((q_rad_left(4) * 180 / M_PI) - wrist_yaw_range[0]) / (wrist_yaw_range[1] - wrist_yaw_range[0])));

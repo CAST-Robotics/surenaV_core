@@ -8,11 +8,17 @@ S5_hand::S5_hand(HandType type) : hand_type(type) {
         minimum = {-110.0, -90.0, -60.0, -90.0, -90.0, -20.0, -20.0};
         maximum = {80.0, -5.0, 60.0, -5.0, 90.0, 20.0, 20.0};
         wrist_clip_value = 85.0;
+        // motor_params order : "x0", "y0", "z0", "c1", "r1", "x3", "y3", "z3"
+        motor_params[0] = {2.25, 2.0, -0.5, 8.0, 1.0, 0.75, 2.5, -8.0};  // Motor A
+        motor_params[1] = {-2.25, 2.0, -0.5, 6.0, 1.0, 0.75, 2.5, -6.0}; // Motor B
     } else { // LEFT
         angle_fix_shd = toRad(-10);
         minimum = {-110.0, 5.0, -60.0, -90.0, -90.0, -20.0, -20.0};
         maximum = {80.0, 90.0, 60.0, -5.0, 90.0, 20.0, 20.0};
         wrist_clip_value = 64.0;
+
+        motor_params[0] = {-2.25, 2.0, -0.5, 8.0, 1.0, -0.75, 2.5, -8.0}; // Motor A (mirrored)
+        motor_params[1] = {2.25, 2.0, -0.5, 6.0, 1.0, -0.75, 2.5, -6.0};  // Motor B (mirrored)
     }
 }
 
@@ -190,6 +196,28 @@ double S5_hand::toRad(double d) {
     return d * M_PI / 180.0; 
 }
 
+double S5_hand::deg2rad(double d) {
+    return d * M_PI / 180.0;
+}
+
+double S5_hand::rad2deg(double r) {
+    return r * 180.0 / M_PI;
+}
+
+Matrix3d S5_hand::Rx(double t) const {
+    Matrix3d R = Matrix3d::Identity();
+    R(1, 1) = cos(t); R(1, 2) = -sin(t);
+    R(2, 1) = sin(t); R(2, 2) = cos(t);
+    return R;
+}
+
+Matrix3d S5_hand::Ry(double t) const {
+    Matrix3d R = Matrix3d::Identity();
+    R(0, 0) = cos(t); R(0, 2) = sin(t);
+    R(2, 0) = -sin(t); R(2, 2) = cos(t);
+    return R;
+}
+
 MatrixXd S5_hand::rot(int axis, double q, int dim) {
     MatrixXd R;
     if (dim == 3) {
@@ -353,6 +381,93 @@ double S5_hand::wrist_left_calc(double alpha, double beta) {
         tempRes = (tempRes > 0) ? wrist_clip_value : -wrist_clip_value;
     }
     return tempRes;
+}
+
+Vector2d S5_hand::solve_wrist(double roll_deg, double pitch_deg) {
+    double pitch = -deg2rad(pitch_deg);
+    double roll = -deg2rad(roll_deg);
+
+    Vector2d results(0.0, 0.0);
+    for (int i = 0; i < 2; ++i) {
+        const MotorParams& params = motor_params[i];
+
+        Vector3d P0(params.x0, params.y0, params.z0);
+        Vector3d P1 = Rx(pitch) * Ry(roll) * P0;
+        double x1 = P1(0), y1 = P1(1), z1 = P1(2);
+
+        double dx = params.x3 - x1;
+        double dz = params.z3 - z1;
+        double A = -dx;
+        double B = dz;
+        double R_len = std::hypot(A, B);
+
+        if (R_len < 1e-6) {
+            results(i) = 0.0;
+            continue;
+        }
+
+        double K = (dx * dx + dz * dz + params.r1 * params.r1 + (params.y3 - y1) * (params.y3 - y1) - params.c1 * params.c1) / (2.0 * params.r1);
+        double s = -K / R_len;
+        if (s < -1.0 - 1e-6 || s > 1.0 + 1e-6) {
+            results(i) = 0.0;
+            continue;
+        }
+        s = std::max(-1.0, std::min(1.0, s));
+
+        double phi = std::atan2(B, A);
+        double asin_s = std::asin(s);
+
+        std::vector<double> thetas = {-phi + asin_s, -phi + M_PI - asin_s};
+        std::set<double> seen;
+        std::vector<double> candidates;
+        for (double th : thetas) {
+            double norm_th = std::atan2(std::sin(th), std::cos(th));
+            double key = std::round(norm_th * 1e6) / 1e6;
+            if (seen.find(key) == seen.end()) {
+                seen.insert(key);
+                candidates.push_back(norm_th);
+            }
+        }
+
+        if (candidates.empty()) {
+            results(i) = 0.0;
+            continue;
+        }
+
+        // Select the positive solution (theta_deg > 0), preferring the smallest positive if multiple
+        double best_th = 0.0;
+        bool found_positive = false;
+        double min_pos_abs = std::numeric_limits<double>::infinity();
+        for (double cand : candidates) {
+            double theta_deg = rad2deg(cand);
+            if (theta_deg > 0.0) {
+                double abs_val = std::fabs(theta_deg);
+                if (!found_positive || abs_val < min_pos_abs) {
+                    min_pos_abs = abs_val;
+                    best_th = cand;
+                    found_positive = true;
+                }
+            }
+        }
+
+        if (!found_positive) {
+            // If no positive, pick the largest (least negative)
+            double max_th_deg = -std::numeric_limits<double>::infinity();
+            for (double cand : candidates) {
+                double td = rad2deg(cand);
+                if (td > max_th_deg) {
+                    max_th_deg = td;
+                    best_th = cand;
+                }
+            }
+        }
+
+        double theta_deg = rad2deg(best_th);
+        theta_deg = std::max(5.0, std::min(180.0, theta_deg));
+
+        results(i) = theta_deg;
+    }
+    return results;
 }
 
 // --- SIMULATION & HARDWARE ---
