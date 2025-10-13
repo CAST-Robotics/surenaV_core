@@ -371,7 +371,7 @@ void HandManager::publishMotorData(const VectorXd& q_rad_right, const VectorXd& 
                             (((hand_func_R.wrist_left_calc(q_rad_right(5), q_rad_right(6))) - wrist_left_range[0]) / (wrist_left_range[1] - wrist_left_range[0])));
         
         Vector2d wrist_res = hand_func_R.solve_wrist(q_rad_right(5)*180/M_PI, q_rad_right(6)*180/M_PI); // (motor 25 (A), motor 24 (B))
-        cout << q_rad_right(5)*180/M_PI << ", " << q_rad_right(6)*180/M_PI << ", " << q_motor[24] << ", " << q_motor[25] << ", " << int(wrist_res(0)) << ", " << int(wrist_res(1)) << endl;
+        //cout << q_rad_right(5)*180/M_PI << ", " << q_rad_right(6)*180/M_PI << ", " << q_motor[24] << ", " << q_motor[25] << ", " << int(wrist_res(0)) << ", " << int(wrist_res(1)) << endl;
 
         // Wrist calculations for left hand (indices 26-28)
         q_motor[26] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
@@ -1084,7 +1084,7 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
     const int LEFT_PITCH_SENSOR = 7;
     
     // Speed parameters
-    const double HOMING_SPEED = 0.1; // rad/s
+    const double HOMING_SPEED = 0.05; // rad/s
     const double TIME_STEP = T;      // 0.005s
     
     // Initialize joint positions (default to zero)
@@ -1106,6 +1106,7 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
         YAW_HOMING,        // Step 3: Home yaw joints using hall sensors
         PITCH_HOMING,      // Step 4: Home pitch joints using hall sensors
         ROLL_HOMING,       // Step 5: Home roll joints using hall sensors
+        SET_DESIRED_ANGLES // Step 6: Add desired angles to each joint to put each joint in desired position
         COMPLETED          // All joints homed
     };
     
@@ -1129,101 +1130,131 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
     const double LEFT_ELBOW_DIR = -1;   // negative for collapsed direction
     
     int timeout_counter = 0;
-    const int MAX_TIMEOUT = 4000; // 20 seconds at 200Hz
     
     ROS_INFO("Starting homing sequence for both arms...");
     
-    while ((right_state != COMPLETED || left_state != COMPLETED) && timeout_counter < MAX_TIMEOUT && ros::ok()) {
-        
-        // Right arm homing sequence
-        if (right_state == ROLL_OPENING) {
-            if (!right_roll_opened) {
-                q_right_current(1) += ROLL_OPEN_ANGLE * RIGHT_ROLL_DIR; // arm_roll joint
-                right_roll_opened = true;
-                ROS_INFO("Right arm: Opening roll joint by 0.1 rad");
+    while ((right_state != COMPLETED || left_state != COMPLETED) && ros::ok()) {
+        // cout << hall_sensors_state[0] << hall_sensors_state[1] << hall_sensors_state[2] << hall_sensors_state[3] << hall_sensors_state[4] << hall_sensors_state[5] << hall_sensors_state[6] << hall_sensors_state[7] << endl;
+        if (timeout_counter > 100) {
+            // Right arm homing sequence
+            if (right_state == ROLL_OPENING) {
+                if (!right_roll_opened) {
+                    q_right_current(1) += HOMING_SPEED * TIME_STEP * RIGHT_ROLL_DIR; // arm_roll joint
+                    if ((q_right_current(1)*RIGHT_ROLL_DIR) >= ROLL_OPEN_ANGLE) right_roll_opened = true;
+                } else {
+                    ROS_INFO("Right arm: Opening roll joint by 0.1 rad");
+                    right_state = ELBOW_HOMING;
+                }
             }
-            right_state = ELBOW_HOMING;
-        }
-        else if (right_state == ELBOW_HOMING) {
-            if (hall_sensors_state[RIGHT_ELBOW_SENSOR] == 0) {
-                double joint_speed = HOMING_SPEED * TIME_STEP * (-RIGHT_ELBOW_DIR);
-                q_right_current(3) += joint_speed; // elbow joint
-            } else {
-                ROS_INFO("Right arm: Elbow joint homed");
-                right_state = YAW_HOMING;
+            else if (right_state == ELBOW_HOMING) {
+                if (hall_sensors_state[RIGHT_ELBOW_SENSOR] == 0) {
+                    double joint_speed = HOMING_SPEED * TIME_STEP * (-RIGHT_ELBOW_DIR);
+                    q_right_current(3) += joint_speed; // elbow joint
+                } else {
+                    ROS_INFO("Right arm: Elbow joint homed");
+                    right_state = YAW_HOMING;
+                }
             }
-        }
-        else if (right_state == YAW_HOMING) {
-            if (hall_sensors_state[RIGHT_YAW_SENSOR] == 0) {
-                double joint_speed = HOMING_SPEED * TIME_STEP * (-RIGHT_YAW_DIR);
-                q_right_current(2) += joint_speed; // arm_yaw joint
-            } else {
-                ROS_INFO("Right arm: Yaw joint homed");
-                right_state = PITCH_HOMING;
+            else if (right_state == YAW_HOMING) {
+                if (hall_sensors_state[RIGHT_YAW_SENSOR] == 0) {
+                    double joint_speed = HOMING_SPEED * TIME_STEP * (-RIGHT_YAW_DIR);
+                    q_right_current(2) += joint_speed; // arm_yaw joint
+                } else {
+                    ROS_INFO("Right arm: Yaw joint homed");
+                    right_state = PITCH_HOMING;
+                }
             }
-        }
-        else if (right_state == PITCH_HOMING) {
-            if (hall_sensors_state[RIGHT_PITCH_SENSOR] == 0) {
-                double joint_speed = HOMING_SPEED * TIME_STEP * (-RIGHT_PITCH_DIR);
-                q_right_current(0) += joint_speed; // arm_pitch joint
-            } else {
-                ROS_INFO("Right arm: Pitch joint homed");
-                right_state = ROLL_HOMING;
+            else if (right_state == PITCH_HOMING) {
+                if (hall_sensors_state[RIGHT_PITCH_SENSOR] == 0) {
+                    double joint_speed = HOMING_SPEED * TIME_STEP * (-RIGHT_PITCH_DIR);
+                    q_right_current(0) += joint_speed; // arm_pitch joint
+                } else {
+                    ROS_INFO("Right arm: Pitch joint homed");
+                    right_state = ROLL_HOMING;
+                }
             }
-        }
-        else if (right_state == ROLL_HOMING) {
-            if (hall_sensors_state[RIGHT_ROLL_SENSOR] == 0) {
-                double joint_speed = HOMING_SPEED * TIME_STEP * (-RIGHT_ROLL_DIR);
-                q_right_current(1) += joint_speed; // arm_roll joint
-            } else {
-                ROS_INFO("Right arm: Roll joint homed");
-                right_state = COMPLETED;
+            else if (right_state == ROLL_HOMING) {
+                if (hall_sensors_state[RIGHT_ROLL_SENSOR] == 0) {
+                    double joint_speed = HOMING_SPEED * TIME_STEP * (-RIGHT_ROLL_DIR);
+                    q_right_current(1) += joint_speed; // arm_roll joint
+                } else {
+                    ROS_INFO("Right arm: Roll joint homed");
+                    right_state = SET_DESIRED_ANGLES;
+                }
             }
-        }
-        
-        // Left arm homing sequence
-        if (left_state == ROLL_OPENING) {
-            if (!left_roll_opened) {
-                q_left_current(1) += ROLL_OPEN_ANGLE * LEFT_ROLL_DIR; // arm_roll joint
-                left_roll_opened = true;
-                ROS_INFO("Left arm: Opening roll joint by 0.1 rad");
+            else if (right_state == SET_DESIRED_ANGLES) {
+                    // q_right_current(0) += HOMING_SPEED * TIME_STEP * RIGHT_PITCH_DIR;
+                    // q_right_current(1) += HOMING_SPEED * TIME_STEP * RIGHT_ROLL_DIR;
+                    // q_right_current(2) += HOMING_SPEED * TIME_STEP * RIGHT_YAW_DIR;
+                    // q_right_current(3) += HOMING_SPEED * TIME_STEP * RIGHT_ELBOW_DIR;
+                    // if ((q_right_current(1)*RIGHT_ROLL_DIR) >= ROLL_OPEN_ANGLE) right_roll_opened = true;   //// correct it for all joints
+
+                } else {
+                    ROS_INFO("Right Arm in Home State");
+                    right_state = COMPLETED;
+                }
+            
+            // Left arm homing sequence
+            if (left_state == ROLL_OPENING) {
+                if (!left_roll_opened) {
+                    q_left_current(1) += HOMING_SPEED * TIME_STEP * LEFT_ROLL_DIR; // arm_roll joint
+                    if ((q_left_current(1)*LEFT_ROLL_DIR) >= ROLL_OPEN_ANGLE) left_roll_opened = true;
+                } else {
+                    ROS_INFO("Left arm: Opening roll joint by 0.1 rad");
+                    left_state = ELBOW_HOMING;
+                }
             }
-            left_state = ELBOW_HOMING;
-        }
-        else if (left_state == ELBOW_HOMING) {
-            if (hall_sensors_state[LEFT_ELBOW_SENSOR] == 0) {
-                double joint_speed = HOMING_SPEED * TIME_STEP * (-LEFT_ELBOW_DIR);
-                q_left_current(3) += joint_speed; // elbow joint
-            } else {
-                ROS_INFO("Left arm: Elbow joint homed");
-                left_state = YAW_HOMING;
+            else if (left_state == ELBOW_HOMING) {
+                if (hall_sensors_state[LEFT_ELBOW_SENSOR] == 0) {
+                    double joint_speed = HOMING_SPEED * TIME_STEP * (-LEFT_ELBOW_DIR);
+                    q_left_current(3) += joint_speed; // elbow joint
+                } else {
+                    ROS_INFO("Left arm: Elbow joint homed");
+                    left_state = YAW_HOMING;
+                }
             }
-        }
-        else if (left_state == YAW_HOMING) {
-            if (hall_sensors_state[LEFT_YAW_SENSOR] == 0) {
-                double joint_speed = HOMING_SPEED * TIME_STEP * (-LEFT_YAW_DIR);
-                q_left_current(2) += joint_speed; // arm_yaw joint
-            } else {
-                ROS_INFO("Left arm: Yaw joint homed");
-                left_state = PITCH_HOMING;
+            else if (left_state == YAW_HOMING) {
+                if (hall_sensors_state[LEFT_YAW_SENSOR] == 0) {
+                    double joint_speed = HOMING_SPEED * TIME_STEP * (-LEFT_YAW_DIR);
+                    q_left_current(2) += joint_speed; // arm_yaw joint
+                } else {
+                    ROS_INFO("Left arm: Yaw joint homed");
+                    left_state = PITCH_HOMING;
+                }
             }
-        }
-        else if (left_state == PITCH_HOMING) {
-            if (hall_sensors_state[LEFT_PITCH_SENSOR] == 0) {
-                double joint_speed = HOMING_SPEED * TIME_STEP * (-LEFT_PITCH_DIR);
-                q_left_current(0) += joint_speed; // arm_pitch joint
-            } else {
-                ROS_INFO("Left arm: Pitch joint homed");
-                left_state = ROLL_HOMING;
+            else if (left_state == PITCH_HOMING) {
+                if (hall_sensors_state[LEFT_PITCH_SENSOR] == 0) {
+                    double joint_speed = HOMING_SPEED * TIME_STEP * (-LEFT_PITCH_DIR);
+                    q_left_current(0) += joint_speed; // arm_pitch joint
+                } else {
+                    ROS_INFO("Left arm: Pitch joint homed");
+                    left_state = ROLL_HOMING;
+                }
             }
-        }
-        else if (left_state == ROLL_HOMING) {
-            if (hall_sensors_state[LEFT_ROLL_SENSOR] == 0) {
-                double joint_speed = HOMING_SPEED * TIME_STEP * (-LEFT_ROLL_DIR);
-                q_left_current(1) += joint_speed; // arm_roll joint
-            } else {
-                ROS_INFO("Left arm: Roll joint homed");
-                left_state = COMPLETED;
+            else if (left_state == ROLL_HOMING) {
+                if (hall_sensors_state[LEFT_ROLL_SENSOR] == 0) {
+                    double joint_speed = HOMING_SPEED * TIME_STEP * (-LEFT_ROLL_DIR);
+                    q_left_current(1) += joint_speed; // arm_roll joint
+                } else {
+                    ROS_INFO("Left arm: Roll joint homed");
+                    left_state = SET_DESIRED_ANGLES;
+                }
+            }
+            else if (left_state == SET_DESIRED_ANGLES) {
+                    // q_left_current(0) += HOMING_SPEED * TIME_STEP * LEFT_PITCH_DIR;
+                    // q_left_current(1) += HOMING_SPEED * TIME_STEP * LEFT_ROLL_DIR;
+                    // q_left_current(2) += HOMING_SPEED * TIME_STEP * LEFT_YAW_DIR;
+                    // q_left_current(3) += HOMING_SPEED * TIME_STEP * LEFT_ELBOW_DIR;
+                    // if ((q_right_current(1)*RIGHT_ROLL_DIR) >= ROLL_OPEN_ANGLE) right_roll_opened = true;   /// correct it for left
+
+                } else {
+                    ROS_INFO("Left Arm in Home State");
+                    left_state = COMPLETED;
+                }
+            }
+        else {
+            for (int i = 0; i < 8; i++) {
+                hall_sensors_state[i] = 0;
             }
         }
         
@@ -1258,7 +1289,7 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
         
         return true;
     } else {
-        ROS_ERROR("Arm homing failed - timeout reached before all joints homed");
+        ROS_ERROR("Arm homing failed.");
         return false;
     }
 }

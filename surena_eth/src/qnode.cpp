@@ -77,7 +77,7 @@ bool QNode::Init() {
     VisualizeInit(&n);
 
     QLOG_TRACE()<<"Initializing all ros publishers";
-    _jointsSubscriber = n.subscribe("jointdata/qc", 1000, &QNode::NewJointDataReady, this);
+    _jointsSubscriber = n.subscribe("jointdata/qc", 100, &QNode::NewJointDataReady, this);
     chatter_publisher = n.advertise<std_msgs::String>("chatter", 1000);
     _rigthtFtPublisher= n.advertise<geometry_msgs::Wrench>("surena/ft_r_state", 1000);
     _leftFtPublisher= n.advertise<geometry_msgs::Wrench>("surena/ft_l_state", 1000);
@@ -397,7 +397,7 @@ void QNode::NewJointDataReady(const std_msgs::Int32MultiArray & msg)
 void QNode::run() {
     ros::NodeHandle n;
     ros::Rate loop_rate(200);
-    _jointsSubscriber = n.subscribe("jointdata/qc", 1000, &QNode::NewJointDataReady, this);
+    _jointsSubscriber = n.subscribe("jointdata/qc", 100, &QNode::NewJointDataReady, this);
     //  std_msgs::Int32MultiArray msg;
 //    while (ros::ok()) //Endless loop until Ctrl+c
 //        {
