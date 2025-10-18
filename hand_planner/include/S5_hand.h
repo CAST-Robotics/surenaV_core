@@ -94,6 +94,7 @@ public:
     // Wrist Inverse Kinematics (These are mechanism-specific)
     double wrist_left_calc(double alpha, double beta);
     double wrist_right_calc(double alpha, double beta);
+    Vector2d clampToQuadrilateral(const Vector2d& Q, const vector<Vector2d>& quad);
     Vector2d solve_wrist(double pitch_deg, double roll_deg);
 
     // Simulation and Hardware Interface
