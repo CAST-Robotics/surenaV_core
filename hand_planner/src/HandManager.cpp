@@ -365,14 +365,22 @@ void HandManager::publishMotorData(const VectorXd& q_rad_right, const VectorXd& 
         // Wrist calculations for right hand (indices 23-25)
         q_motor[23] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
                             (((q_rad_right(4) * 180 / M_PI) - wrist_yaw_range[0]) / (wrist_yaw_range[1] - wrist_yaw_range[0])));
-        q_motor[24] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
-                            (((hand_func_R.wrist_right_calc(q_rad_right(5), q_rad_right(6))) - (wrist_right_range[0])) / (wrist_right_range[1] - (wrist_right_range[0]))));
-        q_motor[25] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
-                            (((hand_func_R.wrist_left_calc(q_rad_right(5), q_rad_right(6))) - wrist_left_range[0]) / (wrist_left_range[1] - wrist_left_range[0])));
+        // int temp_danial_24 = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
+        //                     (((hand_func_R.wrist_right_calc(q_rad_right(5), q_rad_right(6))) - (wrist_right_range[0])) / (wrist_right_range[1] - (wrist_right_range[0]))));
+        // int temp_danial_25 = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
+        //                     (((hand_func_R.wrist_left_calc(q_rad_right(5), q_rad_right(6))) - wrist_left_range[0]) / (wrist_left_range[1] - wrist_left_range[0])));
         
         Vector2d wrist_res = hand_func_R.solve_wrist(q_rad_right(5)*180/M_PI, q_rad_right(6)*180/M_PI); // (motor 25 (A), motor 24 (B))
-        //cout << q_rad_right(5)*180/M_PI << ", " << q_rad_right(6)*180/M_PI << ", " << q_motor[24] << ", " << q_motor[25] << ", " << int(wrist_res(0)) << ", " << int(wrist_res(1)) << endl;
-
+        if(int(wrist_res(1)) != -1){
+            q_motor[24] = int(wrist_res(0));
+            q_motor[25] = int(wrist_res(1));
+            right_wrist_res_temp = wrist_res;
+        } else {
+            q_motor[24] = int(right_wrist_res_temp(0));
+            q_motor[25] = int(right_wrist_res_temp(1));
+        }
+        // cout << q_rad_right(5)*180/M_PI << ", " << q_rad_right(6)*180/M_PI << ", " << temp_danial_24 << ", " << temp_danial_25 << ", " << q_motor[24] << ", " << q_motor[25] << endl;
+        
         // Wrist calculations for left hand (indices 26-28)
         q_motor[26] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
                             (((q_rad_left(4) * 180 / M_PI) - wrist_yaw_range[0]) / (wrist_yaw_range[1] - wrist_yaw_range[0])));
@@ -389,7 +397,7 @@ void HandManager::publishMotorData(const VectorXd& q_rad_right, const VectorXd& 
         trajectory_data_pub.publish(trajectory_data);
         last_q_motor = q_motor;
 
-        cout << q_motor[12] << ", " << q_motor[13] << ", " << q_motor[14] << ", " << q_motor[15] << ", " << q_motor[16] << ", " << q_motor[17] << ", " << q_motor[18] << ", " << q_motor[19] << ", " << q_motor[20] << ", " << q_motor[21] << ", " << q_motor[22] << ", " << q_motor[23] << ", " << q_motor[24] << ", " << q_motor[25] << ", " << q_motor[26] << ", " << q_motor[27] << ", " << q_motor[28] << endl;
+        //cout << q_motor[12] << ", " << q_motor[13] << ", " << q_motor[14] << ", " << q_motor[15] << ", " << q_motor[16] << ", " << q_motor[17] << ", " << q_motor[18] << ", " << q_motor[19] << ", " << q_motor[20] << ", " << q_motor[21] << ", " << q_motor[22] << ", " << q_motor[23] << ", " << q_motor[24] << ", " << q_motor[25] << ", " << q_motor[26] << ", " << q_motor[27] << ", " << q_motor[28] << endl;
         
     } else { // simulation
         // Right hand joints

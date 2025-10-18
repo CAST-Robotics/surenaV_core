@@ -383,12 +383,61 @@ double S5_hand::wrist_left_calc(double alpha, double beta) {
     return tempRes;
 }
 
-Vector2d S5_hand::solve_wrist(double roll_deg, double pitch_deg) {
-    double pitch = -deg2rad(pitch_deg);
-    double roll = -deg2rad(roll_deg);
+Vector2d S5_hand::clampToQuadrilateral(const Vector2d& Q, const vector<Vector2d>& quad) {
+    bool inside = true;
+    double prevSign = 0;
+    for (int i = 0; i < 4; i++) {
+        Vector2d A = quad[(i+1)%4] - quad[i];
+        Vector2d B = Q - quad[i];
+        double cross = A.x()*B.y() - A.y()*B.x();
+        if (i == 0)
+            prevSign = cross;
+        else if (cross * prevSign < 0) {
+            inside = false;
+            break;
+        }
+    }
+    if (inside) return Q;
 
-    Vector2d results(0.0, 0.0);
-    for (int i = 0; i < 2; ++i) {
+    double minDist = numeric_limits<double>::max();
+    Vector2d closest;
+    for (int i = 0; i < 4; i++) {
+        Vector2d P1 = quad[i];
+        Vector2d P2 = quad[(i+1)%4];
+        Vector2d v = P2 - P1;
+        Vector2d w = Q - P1;
+        double t = w.dot(v) / v.dot(v);
+        t = std::max(0.0, std::min(1.0, t));
+        Vector2d proj = P1 + t * v;
+        double dist = (proj - Q).squaredNorm();
+        if (dist < minDist) {
+            minDist = dist;
+            closest = proj;
+        }
+    }
+    return closest;
+}
+
+Vector2d S5_hand::solve_wrist(double roll_deg, double pitch_deg) {
+    vector<Vector2d> quad(4);
+    quad[0] = Vector2d(-17, -1.5);
+    quad[1] = Vector2d(9, 33);
+    quad[2] = Vector2d(29, -3);
+    quad[3] = Vector2d(7, -29);
+
+    Vector2d Q(roll_deg, pitch_deg);
+    Vector2d Q_limited = clampToQuadrilateral(Q, quad);
+
+    // cout << roll_deg << ", " << pitch_deg << ", " << Q_limited(0) << ", " << Q_limited(1)<< ", " << endl;  
+
+    double pitch = -deg2rad(Q_limited(1));
+    double roll = -deg2rad(Q_limited(0));
+
+    std::vector<Vector2d> results(2);
+
+    for(int i = 0; i < 2; i++){
+        Vector2d results_temp(-1, -1);
+
         const MotorParams& params = motor_params[i];
 
         Vector3d P0(params.x0, params.y0, params.z0);
@@ -401,17 +450,19 @@ Vector2d S5_hand::solve_wrist(double roll_deg, double pitch_deg) {
         double B = dz;
         double R_len = std::hypot(A, B);
 
+        double K = (dx * dx + dz * dz + params.r1 * params.r1 + (params.y3 - y1) * (params.y3 - y1) - params.c1 * params.c1) / (2.0 * params.r1);
+
         if (R_len < 1e-6) {
-            results(i) = 0.0;
+            results[i] = results_temp;
             continue;
         }
 
-        double K = (dx * dx + dz * dz + params.r1 * params.r1 + (params.y3 - y1) * (params.y3 - y1) - params.c1 * params.c1) / (2.0 * params.r1);
         double s = -K / R_len;
         if (s < -1.0 - 1e-6 || s > 1.0 + 1e-6) {
-            results(i) = 0.0;
+            results[i] = results_temp;
             continue;
         }
+
         s = std::max(-1.0, std::min(1.0, s));
 
         double phi = std::atan2(B, A);
@@ -430,44 +481,32 @@ Vector2d S5_hand::solve_wrist(double roll_deg, double pitch_deg) {
         }
 
         if (candidates.empty()) {
-            results(i) = 0.0;
+            results[i] = results_temp;
             continue;
         }
-
-        // Select the positive solution (theta_deg > 0), preferring the smallest positive if multiple
-        double best_th = 0.0;
-        bool found_positive = false;
-        double min_pos_abs = std::numeric_limits<double>::infinity();
-        for (double cand : candidates) {
-            double theta_deg = rad2deg(cand);
-            if (theta_deg > 0.0) {
-                double abs_val = std::fabs(theta_deg);
-                if (!found_positive || abs_val < min_pos_abs) {
-                    min_pos_abs = abs_val;
-                    best_th = cand;
-                    found_positive = true;
-                }
-            }
+        for (int j = 0; j < std::min(2, (int)candidates.size()); ++j) {
+            results_temp(j) = candidates[j];
         }
 
-        if (!found_positive) {
-            // If no positive, pick the largest (least negative)
-            double max_th_deg = -std::numeric_limits<double>::infinity();
-            for (double cand : candidates) {
-                double td = rad2deg(cand);
-                if (td > max_th_deg) {
-                    max_th_deg = td;
-                    best_th = cand;
-                }
-            }
-        }
-
-        double theta_deg = rad2deg(best_th);
-        theta_deg = std::max(5.0, std::min(180.0, theta_deg));
-
-        results(i) = theta_deg;
+        results[i] = results_temp;
     }
-    return results;
+
+    Vector2d final_results(results[0][0] * 180 / M_PI, results[1][0] * 180 / M_PI);
+
+    //cout << pitch_deg << ", " << roll_deg << ", " << final_results[0] << ", " << final_results[1] << ", " << int(std::max(5.0, std::min(180.0, abs(final_results[0])))) << ", " << int(std::max(5.0, std::min(180.0, abs(final_results[1])))) << endl;
+
+    for(int i = 0; i < 2; i++){
+        if(final_results[i] >=  - 180.0 / M_PI - 1 && final_results[i] <=  - 180.0 / M_PI + 1){
+            final_results[0] = -1;
+            final_results[1] = -1;
+            return final_results;
+        }
+        else{
+            final_results[i] = std::max(5.0, std::min(180.0, abs(final_results[i])));
+        }
+    }
+    
+    return final_results;
 }
 
 // --- SIMULATION & HARDWARE ---

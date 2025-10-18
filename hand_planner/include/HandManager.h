@@ -92,6 +92,7 @@ private:
     VectorXd next_ini_ee_posL;
     vector<double> last_q_gazebo;
     vector<double> last_q_motor;
+    Vector2d right_wrist_res_temp;
 
     
     double sum_r;
