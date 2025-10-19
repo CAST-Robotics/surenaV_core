@@ -462,7 +462,7 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             q_ra << 10.0*M_PI/180.0, -10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
         }
         q_init_r = q_ra;
-
+        q_right_baseline_ = q_right_state_;
         if (q_right_baseline_.size() != 7) q_right_baseline_ = q_init_r;
 
         hand_func_R.HO_FK_palm(q_ra);
@@ -490,9 +490,9 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             Eigen::VectorXd q_left_send = q_left;
             q_left_send.head(4) = q_left_send.head(4) - q_left_baseline_.head(4);
 
-            // Eigen::Vector3d head_angles(0,0,0);
+            Eigen::Vector3d head_angles(0,0,0);
             head_follow_hand(RIGHT, q_send);
-            Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
+            //Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
 
             publishMotorData(q_send, q_left_send, head_angles);
             ros::spinOnce();
@@ -515,6 +515,7 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             q_la << 10.0*M_PI/180.0, 10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
         }
         q_init_l = q_la;
+        q_left_baseline_ = q_left_state_;
 
         if (q_left_baseline_.size() != 7) q_left_baseline_ = q_init_l;
 
@@ -547,9 +548,9 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             Eigen::VectorXd q_right_send = q_right;
             q_right_send.head(4) = q_right_send.head(4) - q_right_baseline_.head(4);
 
-            // Eigen::Vector3d head_angles(0,0,0);
+            Eigen::Vector3d head_angles(0,0,0);
             head_follow_hand(LEFT, q_send_l);
-            Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
+            //Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
 
             publishMotorData(q_right_send, q_send_l, head_angles);
             ros::spinOnce();
@@ -580,6 +581,7 @@ bool HandManager::both_hands(hand_planner::move_hand_both::Request &req, hand_pl
         q_ra << 10.0*M_PI/180.0, -10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
     }
     q_init_r = q_ra;
+    q_right_baseline_ = q_right_state_;
     if (q_right_baseline_.size() != 7) q_right_baseline_ = q_init_r;
     hand_func_R.HO_FK_palm(q_ra);
     next_ini_ee_posR = hand_func_R.r_palm;
@@ -591,6 +593,7 @@ bool HandManager::both_hands(hand_planner::move_hand_both::Request &req, hand_pl
         q_la << 10.0*M_PI/180.0, 10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
     }
     q_init_l = q_la;
+    q_left_baseline_ = q_left_state_;
     if (q_left_baseline_.size() != 7) q_left_baseline_ = q_init_l;
     hand_func_L.HO_FK_palm(q_la);
     next_ini_ee_posL = hand_func_L.r_palm;
@@ -746,6 +749,7 @@ bool HandManager::head_track_handler(hand_planner::head_track::Request &req, han
             q_right.resize(7);
             q_right << 10.0*M_PI/180.0, -10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
         }
+        q_right_baseline_ = q_right_state_;
         if (q_right_baseline_.size() != 7) {
             q_right_baseline_ = q_right;
         }
@@ -786,7 +790,7 @@ bool HandManager::write_string_handler(hand_planner::WriteString::Request &req,
     VectorXd q(7);
     if (q_right_state_.size()==7) q = q_right_state_;
     else q << 10*M_PI/180.0, -10*M_PI/180.0, 0, -25*M_PI/180.0, 0, 0, 0;
-
+    q_right_baseline_ = q_right_state_;
     if (q_right_baseline_.size()!=7) q_right_baseline_ = q;
 
     Vector3d r_target(0.45, 0.02, 0.03);
@@ -826,7 +830,7 @@ bool HandManager::move_hand_relative_handler(hand_planner::PickAndMove::Request 
     VectorXd q(7);
     if (q_right_state_.size()==7) q = q_right_state_;
     else q << 10*M_PI/180.0, -10*M_PI/180.0, 0, -25*M_PI/180.0, 0, 0, 0;
-
+    q_right_baseline_ = q_right_state_;
     if (q_right_baseline_.size()!=7) q_right_baseline_ = q;
 
     Matrix3d R_pick = hand_func_R.rot(2, -100.0*M_PI/180.0, 3);
@@ -998,7 +1002,7 @@ bool HandManager::move_hand_general_handler(hand_planner::MoveHandGeneral::Reque
         q.resize(7);
         q << 10.0*M_PI/180.0, -10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
     }
-
+    q_right_baseline_ = q_right_state_;
     if (q_right_baseline_.size() != 7) {
         q_right_baseline_ = q;
     }
@@ -1203,13 +1207,13 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
 
     // Joint offsets for homing at desired angles in radians
     const double RIGHT_PITCH_OFFSET = 22.0 * M_PI / 180;
-    const double RIGHT_ROLL_OFFSET = 9.0 * M_PI / 180;
+    const double RIGHT_ROLL_OFFSET = 7.0 * M_PI / 180;
     const double RIGHT_YAW_OFFSET = 93.0 * M_PI / 180;
-    const double RIGHT_ELBOW_OFFSET = 15.0 * M_PI / 180;
-    const double LEFT_PITCH_OFFSET = 13.0 * M_PI / 180;
-    const double LEFT_ROLL_OFFSET = 7.0 * M_PI / 180;
+    const double RIGHT_ELBOW_OFFSET = 14.0 * M_PI / 180;
+    const double LEFT_PITCH_OFFSET = 28.0 * M_PI / 180;
+    const double LEFT_ROLL_OFFSET = 9.0 * M_PI / 180;
     const double LEFT_YAW_OFFSET = 103.0 * M_PI / 180;
-    const double LEFT_ELBOW_OFFSET = 20.0 * M_PI / 180;
+    const double LEFT_ELBOW_OFFSET = 19.0 * M_PI / 180;
     
     // Initialize joint positions (default to zero)
     Eigen::VectorXd q_right_current(7);
@@ -1266,7 +1270,7 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
             // Right arm homing sequence
             if (right_state == ROLL_OPENING) {
                 if (!right_roll_opened) {
-                    q_right_current(1) += HOMING_SPEED * TIME_STEP * RIGHT_ROLL_DIR; // arm_roll joint
+                    q_right_current(1) += 0.5 * HOMING_SPEED * TIME_STEP * RIGHT_ROLL_DIR; // arm_roll joint
                     if ((q_right_current(1)*RIGHT_ROLL_DIR) >= ROLL_OPEN_ANGLE) right_roll_opened = true;
                 } else {
                     ROS_INFO("Right arm: Opening roll joint by 0.1 rad");
@@ -1285,7 +1289,7 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
             else if (right_state == YAW_HOMING) {
                 if (hall_sensors_state[RIGHT_YAW_SENSOR] == 0) {
                     double joint_speed = HOMING_SPEED * TIME_STEP * (-RIGHT_YAW_DIR);
-                    q_right_current(2) += joint_speed; // arm_yaw joint
+                    q_right_current(2) += 2* joint_speed; // arm_yaw joint
                 } else {
                     ROS_INFO("Right arm: Yaw joint homed");
                     right_state = PITCH_HOMING;
@@ -1335,7 +1339,7 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
             // Left arm homing sequence
             if (left_state == ROLL_OPENING) {
                 if (!left_roll_opened) {
-                    q_left_current(1) += HOMING_SPEED * TIME_STEP * LEFT_ROLL_DIR; // arm_roll joint
+                    q_left_current(1) += 0.5* HOMING_SPEED * TIME_STEP * LEFT_ROLL_DIR; // arm_roll joint
                     if ((q_left_current(1)*LEFT_ROLL_DIR) >= ROLL_OPEN_ANGLE) left_roll_opened = true;
                 } else {
                     ROS_INFO("Left arm: Opening roll joint by 0.1 rad");
@@ -1353,7 +1357,7 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
             }
             else if (left_state == YAW_HOMING) {
                 if (hall_sensors_state[LEFT_YAW_SENSOR] == 0) {
-                    double joint_speed = HOMING_SPEED * TIME_STEP * (-LEFT_YAW_DIR);
+                    double joint_speed = 2* HOMING_SPEED * TIME_STEP * (-LEFT_YAW_DIR);
                     q_left_current(2) += joint_speed; // arm_yaw joint
                 } else {
                     ROS_INFO("Left arm: Yaw joint homed");
