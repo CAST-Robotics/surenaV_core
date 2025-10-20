@@ -73,7 +73,7 @@ bool QNode::Init() {
 	// Add your ros communications here.
 
 chatter_publisher = n.advertise<std_msgs::String>("chatter", 1000);
-_jointPublisher =    n.advertise<std_msgs::Int32MultiArray>("jointdata/qc", 1000);
+_jointPublisher =    n.advertise<std_msgs::Int32MultiArray>("jointdata/qc", 100);
 
 _getstatusService = n.serviceClient<std_srvs::Trigger>("GetRobotStatus");
 _activeCspService = n.serviceClient<robot_teleop::active_csp>("ActiveCSP");

@@ -56,6 +56,8 @@ private:
     ros::Subscriber joint_qc_sub;
     ros::Subscriber teleoperation_data_sub;
     ros::Subscriber micArray_data_sub;
+    ros::Subscriber hand_keyboard_sub_;
+    ros::Subscriber hall_sensor_sub_;
     ros::ServiceServer move_hand_single_service;
     ros::ServiceServer move_hand_both_service;
     ros::ServiceServer grip_online_service;
@@ -69,8 +71,9 @@ private:
     ros::ServiceServer finger_control_service_;
     ros::ServiceServer finger_scenario_service_;
     ros::ServiceServer arm_back_to_home_service_;
-    ros::Subscriber hand_keyboard_sub_;
+    ros::ServiceServer arm_home_service_;
     ros::Publisher publish_trigger_pub_;
+    ros::Subscriber hand_keyboard_sub_;
   
     ros::WallTime hand_keyboard_last_input_;
     double hand_step_T_ = 1.0;
@@ -97,11 +100,14 @@ private:
     vector<double> hand_motor_commands_ = std::vector<double>(29, 0);
     vector<double> hand_gazebo_commands_ = std::vector<double>(29, 0.0);
     mutable std::mutex command_mutex_;
+    Vector2d right_wrist_res_temp;
 
     
     double sum_r;
     double sum_l;
     int QcArr[29];
+    int hall_sensors_state[8] = {};
+    std_msgs::Float64MultiArray joint_angles_gazebo_;
     VectorXd q_rad_teleop;
 
     Eigen::VectorXd q_right_state_;
@@ -142,11 +148,12 @@ private:
     void teleoperation_callback(const std_msgs::Float64MultiArray &q_deg_teleop);
     void micArray_callback(const std_msgs::Float64 &msg);
     void hand_keyboard_callback(const std_msgs::Int32::ConstPtr& msg);
+    void hallSensorCallback(const std_msgs::Int32& msg);
     void sendHandMotorCommands(const VectorXd& q_rad_right, const VectorXd& q_rad_left, const Vector3d& head_angles);
 
     MatrixXd scenario_target(HandType type, string scenario, int i, VectorXd ee_pos, string ee_ini_pos);
     VectorXd reach_target(S5_hand& hand_model, VectorXd& q_arm, MatrixXd& qref_arm, double& sum_arm, VectorXd& q_init_arm, MatrixXd targets, string scenario, int M);
-
+    Vector2d head_follow_hand(HandType type, const VectorXd& q_arm);
 
     bool single_hand(hand_planner::move_hand_single::Request &req, hand_planner::move_hand_single::Response &res);
     bool both_hands(hand_planner::move_hand_both::Request &req, hand_planner::move_hand_both::Response &res);
@@ -158,6 +165,7 @@ private:
     bool move_hand_relative_handler(hand_planner::PickAndMove::Request &req, hand_planner::PickAndMove::Response &res);
     bool move_hand_keyboard_handler(hand_planner::KeyboardJog::Request &req, hand_planner::KeyboardJog::Response &res);
     bool move_hand_general_handler(hand_planner::MoveHandGeneral::Request &req, hand_planner::MoveHandGeneral::Response &res);
+    bool arm_home_service_handler(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
     
     // Finger control services
     bool fingerControlService(hand_planner::FingerControl::Request &req, hand_planner::FingerControl::Response &res);

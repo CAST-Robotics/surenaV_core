@@ -8,11 +8,17 @@ S5_hand::S5_hand(HandType type) : hand_type(type) {
         minimum = {-110.0, -90.0, -60.0, -90.0, -90.0, -20.0, -20.0};
         maximum = {80.0, -5.0, 60.0, -5.0, 90.0, 20.0, 20.0};
         wrist_clip_value = 85.0;
+        // motor_params order : "x0", "y0", "z0", "c1", "r1", "x3", "y3", "z3"
+        motor_params[0] = {2.25, 2.0, -0.5, 8.0, 1.0, 0.75, 2.5, -8.0};  // Motor A
+        motor_params[1] = {-2.25, 2.0, -0.5, 6.0, 1.0, 0.75, 2.5, -6.0}; // Motor B
     } else { // LEFT
         angle_fix_shd = toRad(-10);
         minimum = {-110.0, 5.0, -60.0, -90.0, -90.0, -20.0, -20.0};
         maximum = {80.0, 90.0, 60.0, -5.0, 90.0, 20.0, 20.0};
         wrist_clip_value = 64.0;
+
+        motor_params[0] = {-2.25, 2.0, -0.5, 8.0, 1.0, -0.75, 2.5, -8.0}; // Motor A (mirrored)
+        motor_params[1] = {2.25, 2.0, -0.5, 6.0, 1.0, -0.75, 2.5, -6.0};  // Motor B (mirrored)
     }
 }
 
@@ -190,6 +196,28 @@ double S5_hand::toRad(double d) {
     return d * M_PI / 180.0; 
 }
 
+double S5_hand::deg2rad(double d) {
+    return d * M_PI / 180.0;
+}
+
+double S5_hand::rad2deg(double r) {
+    return r * 180.0 / M_PI;
+}
+
+Matrix3d S5_hand::Rx(double t) const {
+    Matrix3d R = Matrix3d::Identity();
+    R(1, 1) = cos(t); R(1, 2) = -sin(t);
+    R(2, 1) = sin(t); R(2, 2) = cos(t);
+    return R;
+}
+
+Matrix3d S5_hand::Ry(double t) const {
+    Matrix3d R = Matrix3d::Identity();
+    R(0, 0) = cos(t); R(0, 2) = sin(t);
+    R(2, 0) = -sin(t); R(2, 2) = cos(t);
+    return R;
+}
+
 MatrixXd S5_hand::rot(int axis, double q, int dim) {
     MatrixXd R;
     if (dim == 3) {
@@ -353,6 +381,132 @@ double S5_hand::wrist_left_calc(double alpha, double beta) {
         tempRes = (tempRes > 0) ? wrist_clip_value : -wrist_clip_value;
     }
     return tempRes;
+}
+
+Vector2d S5_hand::clampToQuadrilateral(const Vector2d& Q, const vector<Vector2d>& quad) {
+    bool inside = true;
+    double prevSign = 0;
+    for (int i = 0; i < 4; i++) {
+        Vector2d A = quad[(i+1)%4] - quad[i];
+        Vector2d B = Q - quad[i];
+        double cross = A.x()*B.y() - A.y()*B.x();
+        if (i == 0)
+            prevSign = cross;
+        else if (cross * prevSign < 0) {
+            inside = false;
+            break;
+        }
+    }
+    if (inside) return Q;
+
+    double minDist = numeric_limits<double>::max();
+    Vector2d closest;
+    for (int i = 0; i < 4; i++) {
+        Vector2d P1 = quad[i];
+        Vector2d P2 = quad[(i+1)%4];
+        Vector2d v = P2 - P1;
+        Vector2d w = Q - P1;
+        double t = w.dot(v) / v.dot(v);
+        t = std::max(0.0, std::min(1.0, t));
+        Vector2d proj = P1 + t * v;
+        double dist = (proj - Q).squaredNorm();
+        if (dist < minDist) {
+            minDist = dist;
+            closest = proj;
+        }
+    }
+    return closest;
+}
+
+Vector2d S5_hand::solve_wrist(double roll_deg, double pitch_deg) {
+    vector<Vector2d> quad(4);
+    quad[0] = Vector2d(-17, -1.5);
+    quad[1] = Vector2d(9, 33);
+    quad[2] = Vector2d(29, -3);
+    quad[3] = Vector2d(7, -29);
+
+    Vector2d Q(roll_deg, pitch_deg);
+    Vector2d Q_limited = clampToQuadrilateral(Q, quad);
+
+    // cout << roll_deg << ", " << pitch_deg << ", " << Q_limited(0) << ", " << Q_limited(1)<< ", " << endl;  
+
+    double pitch = -deg2rad(Q_limited(1));
+    double roll = -deg2rad(Q_limited(0));
+
+    std::vector<Vector2d> results(2);
+
+    for(int i = 0; i < 2; i++){
+        Vector2d results_temp(-1, -1);
+
+        const MotorParams& params = motor_params[i];
+
+        Vector3d P0(params.x0, params.y0, params.z0);
+        Vector3d P1 = Rx(pitch) * Ry(roll) * P0;
+        double x1 = P1(0), y1 = P1(1), z1 = P1(2);
+
+        double dx = params.x3 - x1;
+        double dz = params.z3 - z1;
+        double A = -dx;
+        double B = dz;
+        double R_len = std::hypot(A, B);
+
+        double K = (dx * dx + dz * dz + params.r1 * params.r1 + (params.y3 - y1) * (params.y3 - y1) - params.c1 * params.c1) / (2.0 * params.r1);
+
+        if (R_len < 1e-6) {
+            results[i] = results_temp;
+            continue;
+        }
+
+        double s = -K / R_len;
+        if (s < -1.0 - 1e-6 || s > 1.0 + 1e-6) {
+            results[i] = results_temp;
+            continue;
+        }
+
+        s = std::max(-1.0, std::min(1.0, s));
+
+        double phi = std::atan2(B, A);
+        double asin_s = std::asin(s);
+
+        std::vector<double> thetas = {-phi + asin_s, -phi + M_PI - asin_s};
+        std::set<double> seen;
+        std::vector<double> candidates;
+        for (double th : thetas) {
+            double norm_th = std::atan2(std::sin(th), std::cos(th));
+            double key = std::round(norm_th * 1e6) / 1e6;
+            if (seen.find(key) == seen.end()) {
+                seen.insert(key);
+                candidates.push_back(norm_th);
+            }
+        }
+
+        if (candidates.empty()) {
+            results[i] = results_temp;
+            continue;
+        }
+        for (int j = 0; j < std::min(2, (int)candidates.size()); ++j) {
+            results_temp(j) = candidates[j];
+        }
+
+        results[i] = results_temp;
+    }
+
+    Vector2d final_results(results[0][0] * 180 / M_PI, results[1][0] * 180 / M_PI);
+
+    //cout << pitch_deg << ", " << roll_deg << ", " << final_results[0] << ", " << final_results[1] << ", " << int(std::max(5.0, std::min(180.0, abs(final_results[0])))) << ", " << int(std::max(5.0, std::min(180.0, abs(final_results[1])))) << endl;
+
+    for(int i = 0; i < 2; i++){
+        if(final_results[i] >=  - 180.0 / M_PI - 1 && final_results[i] <=  - 180.0 / M_PI + 1){
+            final_results[0] = -1;
+            final_results[1] = -1;
+            return final_results;
+        }
+        else{
+            final_results[i] = std::max(5.0, std::min(180.0, abs(final_results[i])));
+        }
+    }
+    
+    return final_results;
 }
 
 // --- SIMULATION & HARDWARE ---

@@ -3,7 +3,7 @@
 // --- CONSTRUCTOR ---
 RobotManager::RobotManager(ros::NodeHandle *n) : 
     nh_(n),
-    simulation(true)
+    simulation(false)
 {
     hand_manager_ = std::make_unique<HandManager>(nh_);
     gait_manager_ = std::make_unique<GaitManager>(nh_);
@@ -12,9 +12,9 @@ RobotManager::RobotManager(ros::NodeHandle *n) :
 
     // ROS Communication Setup
     execute_scenario_service_ = nh_->advertiseService("execute_scenario_srv", &RobotManager::execute_scenario_callback, this);
-    combined_motor_pub_ = nh_->advertise<std_msgs::Int32MultiArray>("jointdata/qc", 100);
-    combined_gazebo_pub_ = nh_->advertise<std_msgs::Float64MultiArray>("/joint_angles_gazebo", 100);
-    publish_trigger_sub_ = nh_->subscribe("robot_manager/publish_trigger", 1, &RobotManager::publishTriggerCallback, this);
+    combined_motor_pub_       = nh_->advertise<std_msgs::Int32MultiArray>("jointdata/qc", 100);
+    combined_gazebo_pub_      = nh_->advertise<std_msgs::Float64MultiArray>("/joint_angles_gazebo", 100);
+    publish_trigger_sub_      = nh_->subscribe("robot_manager/publish_trigger", 1, &RobotManager::publishTriggerCallback, this);
 }
 
 // --- YAML FILE LOADER ---
@@ -270,19 +270,19 @@ void RobotManager::publishCombinedMotorCommands() {
         }
 
         if (gait_motor_commands[12] != 0) { // If GaitManager provides a value for Right Arm Shoulder Yaw
-            combined_motor_command_msg_.data[12] = gait_motor_commands[12];
+            combined_motor_command_msg_.data[12] += gait_motor_commands[12];
         }
         if (gait_motor_commands[16] != 0) { // If GaitManager provides a value for Left Arm Shoulder Yaw
-            combined_motor_command_msg_.data[16] = gait_motor_commands[16];
+            combined_motor_command_msg_.data[16] += gait_motor_commands[16];
         }
 
         combined_motor_pub_.publish(combined_motor_command_msg_);
 
-        for (size_t i = 0; i < combined_motor_command_msg_.data.size(); ++i) {
-            std::cout << combined_motor_command_msg_.data[i];
-            if (i < combined_motor_command_msg_.data.size() - 1) std::cout << ", ";
-        }
-        std::cout << std::endl;
+        // for (size_t i = 0; i < combined_motor_command_msg_.data.size(); ++i) {
+        //     std::cout << combined_motor_command_msg_.data[i];
+        //     if (i < combined_motor_command_msg_.data.size() - 1) std::cout << ", ";
+        // }
+        // std::cout << std::endl;
 
     } else { // Gazebo Simulation (radians)
         combined_gazebo_command_msg_.data.clear();
@@ -310,11 +310,11 @@ void RobotManager::publishCombinedMotorCommands() {
 
         combined_gazebo_pub_.publish(combined_gazebo_command_msg_);
         
-        for (size_t i = 0; i < combined_gazebo_command_msg_.data.size(); ++i) {
-            std::cout << combined_gazebo_command_msg_.data[i];
-            if (i < combined_gazebo_command_msg_.data.size() - 1) std::cout << ", ";
-        }
-        std::cout << std::endl;
+        // for (size_t i = 0; i < combined_gazebo_command_msg_.data.size(); ++i) {
+        //     std::cout << combined_gazebo_command_msg_.data[i];
+        //     if (i < combined_gazebo_command_msg_.data.size() - 1) std::cout << ", ";
+        // }
+        // std::cout << std::endl;
     }
 }
 
