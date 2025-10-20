@@ -10,6 +10,7 @@
 #include <ros/package.h>
 
 #include <std_srvs/Empty.h>
+#include <std_msgs/Empty.h>
 #include <std_msgs/Int32.h>
 #include <sensor_msgs/JointState.h>
 #include "sensor_msgs/Imu.h"
@@ -37,8 +38,11 @@ class GaitManager
 public:
     GaitManager(ros::NodeHandle *n);
 
+    const double* getGaitMotorCommands() const;
+    const double* getGaitGazeboCommands() const; 
+
     // Lower Body
-    bool sendCommand();
+    void sendGaitMotorCommands();
     bool setPos(int jointID, int dest);
     bool home(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
     void qcInitial(const sensor_msgs::JointState &msg);
@@ -78,7 +82,6 @@ public:
 private:
     Robot *robot;
     // Lower Body
-    ros::Publisher motorDataPub_;
     ros::Subscriber incSub_;
     ros::Subscriber offsetSub_;
     ros::Subscriber absSub_;
@@ -96,13 +99,13 @@ private:
     ros::ServiceServer homeService_;
     ros::ServiceServer dummyCommand_;
     ros::ServiceServer keyboardWalkSeqService_;
-
+    ros::Publisher publish_trigger_pub_;
+    
     bool isWalkingWithKeyboard;
     bool isKeyboardTrajectoryEnabled;
     bool qcInitialBool_;
     int homeOffset_[32];
-    std_msgs::Int32MultiArray motorCommand_;
-    double motorCommandArray_[29];
+    double motorCommandArray_[29] = {};
     int harmonicRatio_[12];
     float absData_[32];
     int incData_[32];
@@ -114,6 +117,8 @@ private:
     int motorDir_[12];
     bool collision_;
     int bumpOrder_[8];
+    mutable std::mutex command_mutex_;
+    double realCoM_z;
 
     // Ankle Mechanism Parameters
 

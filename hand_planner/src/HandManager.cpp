@@ -4,10 +4,10 @@
 HandManager::HandManager(ros::NodeHandle *n) : 
     hand_func_R(RIGHT), 
     hand_func_L(LEFT),
+
     // Initialize parameters
     T(0.005),
     rate(200),
-    simulation(false),
     X(1.0), Y(0.0), Z(0.0),
     tempX(1.0), tempY(0.0), tempZ(0.0),
     h_pitch(0), h_roll(0), h_yaw(0),
@@ -57,8 +57,7 @@ HandManager::HandManager(ros::NodeHandle *n) :
     left_state_init_ = true;
 
     // ROS Communication Setup
-    trajectory_data_pub          = n->advertise<std_msgs::Int32MultiArray>("jointdata/qc", 100);
-    gazeboJointStatePub_         = n->advertise<std_msgs::Float64MultiArray>("/joint_angles_gazebo", 100);
+    publish_trigger_pub_         = n->advertise<std_msgs::Empty>("robot_manager/publish_trigger", 1);
     camera_data_sub              = n->subscribe("/detection_info", 1, &HandManager::object_detect_callback, this);
     joint_qc_sub                 = n->subscribe("jointdata/qc", 100, &HandManager::joint_qc_callback, this);
     teleoperation_data_sub       = n->subscribe("teleoperation/angles", 100, &HandManager::teleoperation_callback, this);
@@ -120,6 +119,21 @@ void HandManager::object_detect_callback(const hand_planner::DetectionInfoArray 
         }
     }
     X = tempX; Y = tempY; Z = tempZ;
+}
+
+const std::vector<double>& HandManager::getHandMotorCommands() const {
+    std::lock_guard<std::mutex> lock(command_mutex_);
+    return hand_motor_commands_;
+}
+
+const std::vector<double>& HandManager::getHandGazeboCommands() const {
+    std::lock_guard<std::mutex> lock(command_mutex_);
+    return hand_gazebo_commands_;
+}
+
+const std::vector<double>& HandManager::getFingerMotorCommands() const {
+    std::lock_guard<std::mutex> lock(command_mutex_);
+    return finger_control_-> getFingerCommands();
 }
 
 void HandManager::joint_qc_callback(const std_msgs::Int32MultiArray::ConstPtr &qcArray) {
@@ -330,110 +344,89 @@ Vector2d HandManager::head_follow_hand(HandType type, const VectorXd& q_arm)
     return Vector2d(h_yaw, h_pitch);
 }
 
-void HandManager::publishMotorData(const VectorXd& q_rad_right, const VectorXd& q_rad_left, const Vector3d& head_angles) {
-     /* The function automatically:
-      * - Converts radians to encoder counts for real robot
-      * - Handles wrist calculations
-      * - Publishes to appropriate topics (/jointdata/qc or /joint_angles_gazebo)
-      * - Supports both simulation and real robot modes
-      * - ALWAYS publishes data for all 29 joints (use zero vectors for joints you don't want to control)
-    */
-    vector<double> q_motor(29, 0.0);
-    vector<double> q_gazebo(29, 0.0);
+void HandManager::sendHandMotorCommands(const VectorXd& q_rad_right, const VectorXd& q_rad_left, const Vector3d& head_angles) {
+    
+    std::lock_guard<std::mutex> lock(command_mutex_); // Acquire lock
+    std::vector<double> q_motor_temp(29, 0); 
+    std::vector<double> q_gazebo_temp(29, 0.0);
 
-    if (!simulation) {
-        // Right hand motors (indices 12-15)
-        q_motor[12] = int(q_rad_right(0) * encoderResolution[0] * harmonicRatio[0] / (2 * M_PI));
-        q_motor[13] = -int(q_rad_right(1) * encoderResolution[0] * harmonicRatio[1] / (2 * M_PI));
-        q_motor[14] = int(q_rad_right(2) * encoderResolution[1] * harmonicRatio[2] / (2 * M_PI));
-        q_motor[15] = -int(q_rad_right(3) * encoderResolution[1] * harmonicRatio[3] / (2 * M_PI));
-        
-        // Left hand motors (indices 16-19)
-        q_motor[16] = -int(q_rad_left(0) * encoderResolution[0] * harmonicRatio[0] / (2 * M_PI));
-        q_motor[17] = -int(q_rad_left(1) * encoderResolution[0] * harmonicRatio[1] / (2 * M_PI));
-        q_motor[18] = int(q_rad_left(2) * encoderResolution[1] * harmonicRatio[2] / (2 * M_PI));
-        q_motor[19] = int(q_rad_left(3) * encoderResolution[1] * harmonicRatio[3] / (2 * M_PI));
-        
-        // Head motors (indices 20-22) - roll, pitch, yaw
-        q_motor[20] = int(roll_command_range[0] + (roll_command_range[1] - roll_command_range[0]) * 
-                         ((-(head_angles(0)*180/M_PI) - roll_range[0]) / (roll_range[1] - roll_range[0])));
-        q_motor[21] = int(pitch_command_range[0] + (pitch_command_range[1] - pitch_command_range[0]) * 
-                         ((-(head_angles(1)*180/M_PI) - pitch_range[0]) / (pitch_range[1] - pitch_range[0])));
-        q_motor[22] = int(yaw_command_range[0] + (yaw_command_range[1] - yaw_command_range[0]) * 
-                         ((-(head_angles(2)*180/M_PI) - yaw_range[0]) / (yaw_range[1] - yaw_range[0])));
-        
-        // Wrist calculations for right hand (indices 23-25)
-        q_motor[23] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
-                            (((q_rad_right(4) * 180 / M_PI) - wrist_yaw_range[0]) / (wrist_yaw_range[1] - wrist_yaw_range[0])));
-        // int temp_danial_24 = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
-        //                     (((hand_func_R.wrist_right_calc(q_rad_right(5), q_rad_right(6))) - (wrist_right_range[0])) / (wrist_right_range[1] - (wrist_right_range[0]))));
-        // int temp_danial_25 = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
-        //                     (((hand_func_R.wrist_left_calc(q_rad_right(5), q_rad_right(6))) - wrist_left_range[0]) / (wrist_left_range[1] - wrist_left_range[0])));
-        
-        Vector2d wrist_res = hand_func_R.solve_wrist(q_rad_right(5)*180/M_PI, q_rad_right(6)*180/M_PI); // (motor 25 (A), motor 24 (B))
-        if(int(wrist_res(1)) != -1){
-            q_motor[24] = int(wrist_res(0));
-            q_motor[25] = int(wrist_res(1));
-            right_wrist_res_temp = wrist_res;
-        } else {
-            q_motor[24] = int(right_wrist_res_temp(0));
-            q_motor[25] = int(right_wrist_res_temp(1));
-        }
-        // cout << q_rad_right(5)*180/M_PI << ", " << q_rad_right(6)*180/M_PI << ", " << temp_danial_24 << ", " << temp_danial_25 << ", " << q_motor[24] << ", " << q_motor[25] << endl;
-        
-        // Wrist calculations for left hand (indices 26-28)
-        q_motor[26] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
-                            (((q_rad_left(4) * 180 / M_PI) - wrist_yaw_range[0]) / (wrist_yaw_range[1] - wrist_yaw_range[0])));
-        q_motor[27] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
-                            (((hand_func_L.wrist_right_calc(q_rad_left(5), q_rad_left(6))) - (wrist_right_range[0])) / (wrist_right_range[1] - (wrist_right_range[0]))));
-        q_motor[28] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) * 
-                            (((hand_func_L.wrist_left_calc(q_rad_left(5), q_rad_left(6))) - wrist_left_range[0]) / (wrist_left_range[1] - wrist_left_range[0])));
-        
-        // Publish motor data
-        std_msgs::Int32MultiArray trajectory_data;
-        for(int i = 0; i < 29; i++) { 
-            trajectory_data.data.push_back(q_motor[i]); 
-        }
-        trajectory_data_pub.publish(trajectory_data);
-        last_q_motor = q_motor;
+    // Right hand motors (indices 12-15)
+    q_motor_temp[12] = int(q_rad_right(0) * encoderResolution[0] * harmonicRatio[0] / (2 * M_PI));
+    q_motor_temp[13] = -int(q_rad_right(1) * encoderResolution[0] * harmonicRatio[1] / (2 * M_PI));
+    q_motor_temp[14] = int(q_rad_right(2) * encoderResolution[1] * harmonicRatio[2] / (2 * M_PI));
+    q_motor_temp[15] = -int(q_rad_right(3) * encoderResolution[1] * harmonicRatio[3] / (2 * M_PI));
 
-        //cout << q_motor[12] << ", " << q_motor[13] << ", " << q_motor[14] << ", " << q_motor[15] << ", " << q_motor[16] << ", " << q_motor[17] << ", " << q_motor[18] << ", " << q_motor[19] << ", " << q_motor[20] << ", " << q_motor[21] << ", " << q_motor[22] << ", " << q_motor[23] << ", " << q_motor[24] << ", " << q_motor[25] << ", " << q_motor[26] << ", " << q_motor[27] << ", " << q_motor[28] << endl;
-        
-    } else { // simulation
-        // Right hand joints
-        q_gazebo[12] = q_rad_right(0);  
-        q_gazebo[13] = q_rad_right(1);   
-        q_gazebo[14] = q_rad_right(2);  
-        q_gazebo[15] = q_rad_right(3);
-        
-        // Left hand joints
-        q_gazebo[16] = q_rad_left(0);  
-        q_gazebo[17] = q_rad_left(1);   
-        q_gazebo[18] = q_rad_left(2);  
-        q_gazebo[19] = q_rad_left(3);
-        
-        // Head joints
-        q_gazebo[20] = -head_angles(0); // roll
-        q_gazebo[21] = -head_angles(1); // pitch
-        q_gazebo[22] = -head_angles(2); // yaw
-        
-        // Wrist joints for right hand
-        q_gazebo[23] = q_rad_right(4);   
-        q_gazebo[24] = q_rad_right(5);  
-        q_gazebo[25] = q_rad_right(6);
-        
-        // Wrist joints for left hand
-        q_gazebo[26] = q_rad_left(4);   
-        q_gazebo[27] = q_rad_left(5);  
-        q_gazebo[28] = q_rad_left(6); 
-        
-        // Publish gazebo data
-        joint_angles_gazebo_.data.clear();
-        for (int i = 0; i < 29; i++) {
-            joint_angles_gazebo_.data.push_back(q_gazebo[i]);
-        }
-        gazeboJointStatePub_.publish(joint_angles_gazebo_);
+    // Left hand motors (indices 16-19)
+    q_motor_temp[16] = -int(q_rad_left(0) * encoderResolution[0] * harmonicRatio[0] / (2 * M_PI));
+    q_motor_temp[17] = -int(q_rad_left(1) * encoderResolution[0] * harmonicRatio[1] / (2 * M_PI));
+    q_motor_temp[18] = int(q_rad_left(2) * encoderResolution[1] * harmonicRatio[2] / (2 * M_PI));
+    q_motor_temp[19] = int(q_rad_left(3) * encoderResolution[1] * harmonicRatio[3] / (2 * M_PI));
+
+    // Head motors (indices 20-22) - roll, pitch, yaw
+    q_motor_temp[20] = int(roll_command_range[0] + (roll_command_range[1] - roll_command_range[0]) *
+                        ((-(head_angles(0)*180/M_PI) - roll_range[0]) / (roll_range[1] - roll_range[0])));
+    q_motor_temp[21] = int(pitch_command_range[0] + (pitch_command_range[1] - pitch_command_range[0]) *
+                        ((-(head_angles(1)*180/M_PI) - pitch_range[0]) / (pitch_range[1] - pitch_range[0])));
+    q_motor_temp[22] = int(yaw_command_range[0] + (yaw_command_range[1] - yaw_command_range[0]) *
+                        ((-(head_angles(2)*180/M_PI) - yaw_range[0]) / (yaw_range[1] - yaw_range[0])));
+
+    // Wrist calculations for right hand (indices 23-25)
+    q_motor_temp[23] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
+                        (((q_rad_right(4) * 180 / M_PI) - wrist_yaw_range[0]) / (wrist_yaw_range[1] - wrist_yaw_range[0])));
+    // q_motor_temp[24] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
+    //                     (((hand_func_R.wrist_right_calc(q_rad_right(5), q_rad_right(6))) - (wrist_right_range[0])) / (wrist_right_range[1] - (wrist_right_range[0]))));
+    // q_motor_temp[25] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
+    //                     (((hand_func_R.wrist_left_calc(q_rad_right(5), q_rad_right(6))) - wrist_left_range[0]) / (wrist_left_range[1] - wrist_left_range[0])));
+
+    Vector2d wrist_res = hand_func_R.solve_wrist(q_rad_right(5)*180/M_PI, q_rad_right(6)*180/M_PI); // (motor 25 (A), motor 24 (B))
+    if(int(wrist_res(1)) != -1){
+        q_motor[24] = int(wrist_res(0));
+        q_motor[25] = int(wrist_res(1));
+        right_wrist_res_temp = wrist_res;
+    } else {
+        q_motor[24] = int(right_wrist_res_temp(0));
+        q_motor[25] = int(right_wrist_res_temp(1));
     }
+
+    // Wrist calculations for left hand (indices 26-28)
+    q_motor_temp[26] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
+                        (((q_rad_left(4) * 180 / M_PI) - wrist_yaw_range[0]) / (wrist_yaw_range[1] - wrist_yaw_range[0])));
+    q_motor_temp[27] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
+                        (((hand_func_L.wrist_right_calc(q_rad_left(5), q_rad_left(6))) - (wrist_right_range[0])) / (wrist_right_range[1] - (wrist_right_range[0]))));
+    q_motor_temp[28] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
+                        (((hand_func_L.wrist_left_calc(q_rad_left(5), q_rad_left(6))) - wrist_left_range[0]) / (wrist_left_range[1] - wrist_left_range[0])));
+
+    hand_motor_commands_ = q_motor_temp; // Store for RobotManager
+    last_q_motor = q_motor_temp; // Still useful for internal tracking if needed
+
+    // Right hand joints
+    q_gazebo_temp[12] = q_rad_right(0);
+    q_gazebo_temp[13] = q_rad_right(1);
+    q_gazebo_temp[14] = q_rad_right(2);
+    q_gazebo_temp[15] = q_rad_right(3);
+
+    // Left hand joints
+    q_gazebo_temp[16] = q_rad_left(0);
+    q_gazebo_temp[17] = q_rad_left(1);
+    q_gazebo_temp[18] = q_rad_left(2);
+    q_gazebo_temp[19] = q_rad_left(3);
+
+    // Head joints
+    q_gazebo_temp[20] = -head_angles(0); // roll
+    q_gazebo_temp[21] = -head_angles(1); // pitch
+    q_gazebo_temp[22] = -head_angles(2); // yaw
+
+    // Wrist joints for right hand
+    q_gazebo_temp[23] = q_rad_right(4);
+    q_gazebo_temp[24] = q_rad_right(5);
+    q_gazebo_temp[25] = q_rad_right(6);
+
+    // Wrist joints for left hand
+    q_gazebo_temp[26] = q_rad_left(4);
+    q_gazebo_temp[27] = q_rad_left(5);
+    q_gazebo_temp[28] = q_rad_left(6);
+
+    hand_gazebo_commands_ = q_gazebo_temp; // Store for RobotManager
 }
 
 // --- Service Handler Implementations ---
@@ -494,8 +487,8 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             head_follow_hand(RIGHT, q_send);
             //Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
 
-            publishMotorData(q_send, q_left_send, head_angles);
-            ros::spinOnce();
+            sendHandMotorCommands(q_send, q_left_send, head_angles);
+            publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
         }
 
@@ -552,8 +545,8 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             head_follow_hand(LEFT, q_send_l);
             //Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
 
-            publishMotorData(q_right_send, q_send_l, head_angles);
-            ros::spinOnce();
+            sendHandMotorCommands(q_right_send, q_send_l, head_angles);
+            publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
         }
 
@@ -629,8 +622,8 @@ bool HandManager::both_hands(hand_planner::move_hand_both::Request &req, hand_pl
         }
 
         Eigen::Vector3d head_angles(0, 0, 0);
-        publishMotorData(q_send_r, q_send_l, head_angles);
-        ros::spinOnce();
+        sendHandMotorCommands(q_send_r, q_send_l, head_angles);
+        publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
     }
 
@@ -672,12 +665,12 @@ bool HandManager::grip_online(hand_planner::gripOnline::Request &req, hand_plann
         Vector3d target2shoulder = T_CAM2SH.block(0, 3, 3, 1) + T_CAM2SH.block(0, 0, 3, 3) * target2camera;
         
         // Head Pitch
-        if (abs(target2camera(2)) > 0.02) {
+        if (abs(target2camera(2)) > 0.03) {
             h_pitch += Kp * atan2(target2camera(2), sqrt(pow(target2camera(1),2) + pow(target2camera(0),2)));
             h_pitch = max(-28.0*M_PI/180, min(28.0*M_PI/180, h_pitch));
         }
         // Head Yaw
-        if (abs(target2camera(1)) > 0.02) {
+        if (abs(target2camera(1)) > 0.03) {
             h_yaw += Ky * atan2(target2camera(1), target2camera(0));
             h_yaw = max(-60.0*M_PI/180, min(60.0*M_PI/180, h_yaw));
         }
@@ -695,8 +688,8 @@ bool HandManager::grip_online(hand_planner::gripOnline::Request &req, hand_plann
         VectorXd q_delta = current_q_ra - initial_q_ra;
         VectorXd q_rad_left = VectorXd::Zero(7);
         Vector3d head_angles(h_roll, h_pitch, h_yaw);
-        publishMotorData(q_delta, q_rad_left, head_angles);
-        ros::spinOnce();
+        sendHandMotorCommands(q_delta, q_rad_left, head_angles);
+        publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
         t_grip += T;
     }
@@ -717,12 +710,12 @@ bool HandManager::head_track_handler(hand_planner::head_track::Request &req, han
         
         if (Y != 0 && Z != 0){ // target not in robot's sight; so the head cannot track object yet.
             // Head Pitch
-            if (abs(target2camera(2)) > 0.02) {
+            if (abs(target2camera(2)) > 0.03) {
                 h_pitch += Kp * atan2(target2camera(2), sqrt(pow(target2camera(1), 2) + pow(target2camera(0), 2)));
                 h_pitch = max(-28.0 * M_PI / 180, min(28.0 * M_PI / 180, h_pitch));
             }
             // Head Yaw
-            if (abs(target2camera(1)) > 0.02) {
+            if (abs(target2camera(1)) > 0.03) {
                 h_yaw += Ky * atan2(target2camera(1), target2camera(0));
                 h_yaw = max(-60.0 * M_PI / 180, min(60.0 * M_PI / 180, h_yaw));
             }
@@ -761,8 +754,8 @@ bool HandManager::head_track_handler(hand_planner::head_track::Request &req, han
         q_left_send.head(4) = q_left_send.head(4) - q_left_baseline_.head(4);
 
         Vector3d head_angles(h_roll, h_pitch, h_yaw);
-        publishMotorData(q_right_send, q_left_send, head_angles);
-        ros::spinOnce();
+        sendHandMotorCommands(q_right_send, q_left_send, head_angles);
+        publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
     }
     ROS_INFO("Head tracking finished.");
@@ -777,8 +770,8 @@ bool HandManager::teleoperation_handler(std_srvs::Empty::Request &req, std_srvs:
         VectorXd q_rad_right = q_rad_teleop.segment(0, 7);
         VectorXd q_rad_left = q_rad_teleop.segment(7, 7);
         Vector3d head_angles(0, 0, 0);
-        publishMotorData(q_rad_right, q_rad_left, head_angles);
-        ros::spinOnce();
+        sendHandMotorCommands(q_rad_right, q_rad_left, head_angles);
+        publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
     }
     return true;
@@ -812,7 +805,8 @@ bool HandManager::write_string_handler(hand_planner::WriteString::Request &req,
         q_send.head(4) = q_abs.head(4) - q_right_baseline_.head(4);
         Eigen::VectorXd q_left_send = q_left;
         q_left_send.head(4) = q_left_send.head(4) - q_left_baseline_.head(4);
-        publishMotorData(q_send, q_left_send, Vector3d(0,0,0));
+        sendHandMotorCommands(q_send, q_left_send, Vector3d(0,0,0));
+        publish_trigger_pub_.publish(std_msgs::Empty());
     };
 
     if (!approachWhiteboard(hand_func_R, coef_generator, q, r_target, R_target, T, pub)) { res.success=false; return true; }
@@ -852,7 +846,8 @@ bool HandManager::move_hand_relative_handler(hand_planner::PickAndMove::Request 
         q_send.head(4) = q_abs.head(4) - q_right_baseline_.head(4);
         Eigen::VectorXd q_left_send = q_left;
         q_left_send.head(4) = q_left_send.head(4) - q_left_baseline_.head(4);
-        publishMotorData(q_send, q_left_send, Vector3d(0,0,0));
+        sendHandMotorCommands(q_send, q_left_send, Vector3d(0,0,0));
+        publish_trigger_pub_.publish(std_msgs::Empty());
     };
 
     if (!approachViaOneMid(hand_func_R, coef_generator, q, mid, goal, R_pick, 3.0, 3.0, T, pub)) {
@@ -886,19 +881,29 @@ bool HandManager::move_hand_relative_handler(hand_planner::PickAndMove::Request 
 
 void HandManager::hand_keyboard_callback(const std_msgs::Int32::ConstPtr& msg)
 {
-    if (!hand_keyboard_enabled_) return;
+    if (!hand_keyboard_enabled_ || !isHandKeyboardTrajectoryEnabled) return;
+    
     const double STEP_T = 1.0;
     const double MAX_DX = 0.08, MAX_DYZ = 0.30;
 
     int code = msg->data;
+    
+    // Handle ESC key to stop the service
+    if (code == 27) { // ESC key
+        isHandKeyboardTrajectoryEnabled = false;
+        isHandKeyboardActive = false;
+        ROS_INFO("Hand keyboard control stopped by ESC key");
+        return;
+    }
+    
     double dx=0, dy=0, dz=0;
     switch (code) {
         case 'w': case 'W': dx = +0.05; break; // Forward
         case 's': case 'S': dx = -0.05; break; // Backward
-        case 'e': case 'E': dy = +0.10; break; // To the left
+        case 'a': case 'A': dy = +0.10; break; // To the left
         case 'd': case 'D': dy = -0.10; break; // To the right
-        case 'q': case 'Q': dz = +0.10; break; // Upward
-        case 'a': case 'A': dz = -0.10; break; // Downward
+        case 'u': case 'U': dz = +0.10; break; // Upward
+        case 'j': case 'J': dz = -0.10; break; // Downward
         default: return;
     }
 
@@ -925,10 +930,11 @@ void HandManager::hand_keyboard_callback(const std_msgs::Int32::ConstPtr& msg)
     auto pub = [&](const Eigen::VectorXd& qr){
         Eigen::VectorXd q_left_send = q_left;
         q_left_send.head(4) = q_left_send.head(4) - q_left_baseline_.head(4);
-        // Eigen::Vector3d head_angles(0,0,0);
+        Eigen::Vector3d head_angles(0,0,0);
         head_follow_hand(RIGHT, qr);
-        Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
-        publishMotorData(qr, q_left_send, head_angles);
+        // Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
+        sendHandMotorCommands(qr, q_left_send, head_angles);
+        publish_trigger_pub_.publish(std_msgs::Empty());
     };
 
     if (!moveRelative(hand_func_R, coef_generator, q,
@@ -968,23 +974,44 @@ bool HandManager::move_hand_keyboard_handler(hand_planner::KeyboardJog::Request 
     auto pub = [&](const Eigen::VectorXd& qr){
         Eigen::VectorXd q_left_send = q_left;
         q_left_send.head(4) = q_left_send.head(4) - q_left_baseline_.head(4);
-        // Eigen::Vector3d head_angles(0,0,0);
+        Eigen::Vector3d head_angles(0,0,0);
         head_follow_hand(RIGHT, qr);
-        Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
-        publishMotorData(qr, q_left_send, head_angles);
+        // Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
+        sendHandMotorCommands(qr, q_left_send, head_angles);
+        publish_trigger_pub_.publish(std_msgs::Empty());
     };
 
     if (!approachViaOneMid(hand_func_R, coef_generator, q, mid, goal, Rg, 3.0, 3.0, T, pub)) {
-        res.ok=false; res.message="approach failed";
+        res.ok=false; 
+        res.message="approach failed";
         return true;
     }
 
     q_right_state_ = q;
 
+    // Set up keyboard control state
     hand_keyboard_enabled_ = true;
+    isHandKeyboardActive = true;
+    isHandKeyboardTrajectoryEnabled = true;
     hand_keyboard_last_input_ = ros::WallTime::now();
+    
+    int rate = 200;
+    ros::Rate rate_(rate);
+    
+    while (isHandKeyboardActive)
+    {
+        // Process any pending keyboard commands
+        ros::spinOnce();
+        rate_.sleep();
+    }
+    
+    // Clean up
+    hand_keyboard_enabled_ = false;
+    isHandKeyboardActive = false;
+    isHandKeyboardTrajectoryEnabled = false;
+    
     res.ok = true; 
-    res.message = "ready: use keyboard teleop (r/f/t/g/y/h)";
+    res.message = "hand keyboard control stopped";
     return true;
 }
 
@@ -1023,7 +1050,8 @@ bool HandManager::move_hand_general_handler(hand_planner::MoveHandGeneral::Reque
         q_send.head(4) = q_abs.head(4) - q_right_baseline_.head(4);
         Eigen::VectorXd q_left_send = q_left;
         q_left_send.head(4) = q_left_send.head(4) - q_left_baseline_.head(4);
-        publishMotorData(q_send, q_left_send, Vector3d(0,0,0));
+        sendHandMotorCommands(q_send, q_left_send, Vector3d(0,0,0));
+        publish_trigger_pub_.publish(std_msgs::Empty());
     };
 
     const double T1 = 3.0, T2 = 3.0;
@@ -1142,9 +1170,7 @@ bool HandManager::arm_back_to_home_handler(hand_planner::arm_back_to_home::Reque
     q_target_l(6) = q_l(6);
 
     // Params
-    const int NUM_ARM_JOINTS_TO_HOME = 5;
-    const double FIXED_HOME_DURATION = 15.0;
-    double segment_duration = FIXED_HOME_DURATION / NUM_ARM_JOINTS_TO_HOME;
+    double segment_duration = 6;
     if (segment_duration <= 0.0) segment_duration = T;
     int M_segment = static_cast<int>(segment_duration / T);
     if (M_segment == 0) M_segment = 1;
@@ -1157,20 +1183,42 @@ bool HandManager::arm_back_to_home_handler(hand_planner::arm_back_to_home::Reque
         q_send_r.head(4) = qr.head(4) - q_right_baseline_.head(4);
         Eigen::VectorXd q_send_l = ql;
         q_send_l.head(4) = ql.head(4) - q_left_baseline_.head(4);
-        publishMotorData(q_send_r, q_send_l, Eigen::Vector3d(0,0,0));
+        sendHandMotorCommands(q_send_r, q_send_l, Eigen::Vector3d(0,0,0));
+        publish_trigger_pub_.publish(std_msgs::Empty());
     };
 
-    for (int joint_idx = NUM_ARM_JOINTS_TO_HOME - 1; joint_idx >= 0; --joint_idx) {
-        double start_r = q_work_r(joint_idx);
-        double end_r   = q_target_r(joint_idx);
-        double start_l = q_work_l(joint_idx);
-        double end_l   = q_target_l(joint_idx);
+    // Move motor 5 (index 4) back to home first 
+    {
+        double start_r = q_work_r(2);
+        double end_r   = q_target_r(2);
+        double start_l = q_work_l(2);
+        double end_l   = q_target_l(2);
 
         for (int step = 0; step <= M_segment; ++step) {
             double a = (M_segment > 0) ? static_cast<double>(step)/M_segment : 1.0;
-            q_work_r(joint_idx) = start_r + (end_r - start_r)*a;
-            q_work_l(joint_idx) = start_l + (end_l - start_l)*a;
+            q_work_r(2) = start_r + (end_r - start_r)*a;
+            q_work_l(2) = start_l + (end_l - start_l)*a;
             pub(q_work_r,q_work_l);
+            ros::spinOnce();
+            rate_.sleep();
+        }
+    }
+
+    // Move motors 0–3 together to home
+    {
+        Eigen::VectorXd start_r = q_work_r.head(5);
+        Eigen::VectorXd end_r   = q_target_r.head(5);
+        Eigen::VectorXd start_l = q_work_l.head(5);
+        Eigen::VectorXd end_l   = q_target_l.head(5);
+
+        for (int step = 0; step <= M_segment; ++step) {
+            double a = (M_segment > 0) ? static_cast<double>(step)/M_segment : 1.0;
+            for (int j = 0; j < 5; ++j) {
+                if (j == 2) continue; // skip motor 2
+                q_work_r(j) = start_r(j) + (end_r(j) - start_r(j)) * a;
+                q_work_l(j) = start_l(j) + (end_l(j) - start_l(j)) * a;
+            }
+            pub(q_work_r, q_work_l);
             ros::spinOnce();
             rate_.sleep();
         }
@@ -1270,7 +1318,7 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
             // Right arm homing sequence
             if (right_state == ROLL_OPENING) {
                 if (!right_roll_opened) {
-                    q_right_current(1) += 0.5 * HOMING_SPEED * TIME_STEP * RIGHT_ROLL_DIR; // arm_roll joint
+                    q_right_current(1) += HOMING_SPEED * TIME_STEP * RIGHT_ROLL_DIR; // arm_roll joint
                     if ((q_right_current(1)*RIGHT_ROLL_DIR) >= ROLL_OPEN_ANGLE) right_roll_opened = true;
                 } else {
                     ROS_INFO("Right arm: Opening roll joint by 0.1 rad");
@@ -1289,7 +1337,7 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
             else if (right_state == YAW_HOMING) {
                 if (hall_sensors_state[RIGHT_YAW_SENSOR] == 0) {
                     double joint_speed = HOMING_SPEED * TIME_STEP * (-RIGHT_YAW_DIR);
-                    q_right_current(2) += 2* joint_speed; // arm_yaw joint
+                    q_right_current(2) += joint_speed; // arm_yaw joint
                 } else {
                     ROS_INFO("Right arm: Yaw joint homed");
                     right_state = PITCH_HOMING;
@@ -1306,7 +1354,7 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
             }
             else if (right_state == ROLL_HOMING) {
                 if (hall_sensors_state[RIGHT_ROLL_SENSOR] == 0) {
-                    double joint_speed = HOMING_SPEED * TIME_STEP * (-RIGHT_ROLL_DIR);
+                    double joint_speed = 0.5 * HOMING_SPEED * TIME_STEP * (-RIGHT_ROLL_DIR);
                     q_right_current(1) += joint_speed; // arm_roll joint
                 } else {
                     ROS_INFO("Right arm: Roll joint homed");
@@ -1339,7 +1387,7 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
             // Left arm homing sequence
             if (left_state == ROLL_OPENING) {
                 if (!left_roll_opened) {
-                    q_left_current(1) += 0.5* HOMING_SPEED * TIME_STEP * LEFT_ROLL_DIR; // arm_roll joint
+                    q_left_current(1) += HOMING_SPEED * TIME_STEP * LEFT_ROLL_DIR; // arm_roll joint
                     if ((q_left_current(1)*LEFT_ROLL_DIR) >= ROLL_OPEN_ANGLE) left_roll_opened = true;
                 } else {
                     ROS_INFO("Left arm: Opening roll joint by 0.1 rad");
@@ -1357,7 +1405,7 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
             }
             else if (left_state == YAW_HOMING) {
                 if (hall_sensors_state[LEFT_YAW_SENSOR] == 0) {
-                    double joint_speed = 2* HOMING_SPEED * TIME_STEP * (-LEFT_YAW_DIR);
+                    double joint_speed = HOMING_SPEED * TIME_STEP * (-LEFT_YAW_DIR);
                     q_left_current(2) += joint_speed; // arm_yaw joint
                 } else {
                     ROS_INFO("Left arm: Yaw joint homed");
@@ -1375,7 +1423,7 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
             }
             else if (left_state == ROLL_HOMING) {
                 if (hall_sensors_state[LEFT_ROLL_SENSOR] == 0) {
-                    double joint_speed = HOMING_SPEED * TIME_STEP * (-LEFT_ROLL_DIR);
+                    double joint_speed = 0.5 * HOMING_SPEED * TIME_STEP * (-LEFT_ROLL_DIR);
                     q_left_current(1) += joint_speed; // arm_roll joint
                 } else {
                     ROS_INFO("Left arm: Roll joint homed");
@@ -1416,10 +1464,9 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
         
         Eigen::VectorXd q_send_left = q_left_current;
         q_send_left.head(4) = q_left_current.head(4) - q_left_baseline_.head(4);
-        
-        publishMotorData(q_send_right, q_send_left, Eigen::Vector3d(0, 0, 0));
-        
-        ros::spinOnce();
+
+        sendHandMotorCommands(q_send_right, q_send_left, Eigen::Vector3d(0, 0, 0));
+        publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
         timeout_counter++; 
     }

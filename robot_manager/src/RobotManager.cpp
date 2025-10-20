@@ -1,15 +1,20 @@
 #include "RobotManager.h"
 
 // --- CONSTRUCTOR ---
-RobotManager::RobotManager(ros::NodeHandle *n) : nh_(n) {
-    // Instantiate the managers, passing the node handle so they can create their own services/pubs/subs
-    hand_manager_ = std::make_unique<HandManager>(n);
-    gait_manager_ = std::make_unique<GaitManager>(n);
+RobotManager::RobotManager(ros::NodeHandle *n) : 
+    nh_(n),
+    simulation(false)
+{
+    hand_manager_ = std::make_unique<HandManager>(nh_);
+    gait_manager_ = std::make_unique<GaitManager>(nh_);
 
     load_scenarios_from_file();
 
     // ROS Communication Setup
     execute_scenario_service_ = nh_->advertiseService("execute_scenario_srv", &RobotManager::execute_scenario_callback, this);
+    combined_motor_pub_       = nh_->advertise<std_msgs::Int32MultiArray>("jointdata/qc", 100);
+    combined_gazebo_pub_      = nh_->advertise<std_msgs::Float64MultiArray>("/joint_angles_gazebo", 100);
+    publish_trigger_sub_      = nh_->subscribe("robot_manager/publish_trigger", 1, &RobotManager::publishTriggerCallback, this);
 }
 
 // --- YAML FILE LOADER ---
@@ -144,6 +149,75 @@ bool RobotManager::execute_step(const YAML::Node& step) {
         if (!client.call(srv)) { ROS_ERROR("Service call to %s failed.", service_name.c_str()); return false; }
         return true;
 
+    } else if (service_name == "/arm_back_to_home_srv") {
+        ros::ServiceClient client = nh_->serviceClient<hand_planner::arm_back_to_home>(service_name);
+        hand_planner::arm_back_to_home srv;
+        if (!client.call(srv)) { 
+            ROS_ERROR("Service call to %s failed.", service_name.c_str()); 
+            return false; 
+        }
+        return srv.response.success;
+
+    } else if (service_name == "/keyboard_walk_seq") {
+        ros::ServiceClient client = nh_->serviceClient<gait_planner::KeyboardWalkSeq>(service_name);
+        gait_planner::KeyboardWalkSeq srv;
+        srv.request.seq = params["seq"].as<std::string>();
+        if (!client.call(srv)) { 
+            ROS_ERROR("Service call to %s failed.", service_name.c_str()); 
+            return false; 
+        }
+        return srv.response.success;
+
+    } else if (service_name == "/finger_control_srv") {
+        ros::ServiceClient client = nh_->serviceClient<hand_planner::FingerControl>(service_name);
+        hand_planner::FingerControl srv;
+        srv.request.target_positions = params["target_positions"].as<std::vector<int64_t>>();
+        srv.request.pressure_limits = params["pressure_limits"].as<std::vector<int64_t>>();
+        srv.request.pid_kp = params["pid_kp"].as<int64_t>();
+        srv.request.pid_ki = params["pid_ki"].as<int64_t>();
+        srv.request.pid_kd = params["pid_kd"].as<int64_t>();
+        srv.request.hand_selection = params["hand_selection"].as<std::string>();
+        if (!client.call(srv)) { ROS_ERROR("Service call to %s failed.", service_name.c_str()); return false; }
+        return srv.response.success;
+
+    } else if (service_name == "/finger_scenario_srv") {
+        ros::ServiceClient client = nh_->serviceClient<hand_planner::FingerScenario>(service_name);
+        hand_planner::FingerScenario srv;
+        srv.request.scenario_name = params["scenario_name"].as<std::string>();
+        srv.request.hand_selection = params["hand_selection"].as<std::string>();
+        if (!client.call(srv)) { ROS_ERROR("Service call to %s failed.", service_name.c_str()); return false; }
+        return srv.response.success;
+
+    } else if (service_name == "/move_hand_general_srv") {
+        ros::ServiceClient client = nh_->serviceClient<hand_planner::MoveHandGeneral>(service_name);
+        hand_planner::MoveHandGeneral srv;
+        srv.request.commands = params["commands"].as<std::vector<std::string>>();
+        srv.request.go_home_on_finish = params["go_home_on_finish"].as<bool>();
+        if (!client.call(srv)) { ROS_ERROR("Service call to %s failed.", service_name.c_str()); return false; }
+        return srv.response.ok;
+
+    } else if (service_name == "/move_hand_keyboard_srv") {
+        ros::ServiceClient client = nh_->serviceClient<hand_planner::KeyboardJog>(service_name);
+        hand_planner::KeyboardJog srv;
+        if (!client.call(srv)) { ROS_ERROR("Service call to %s failed.", service_name.c_str()); return false; }
+        return srv.response.ok;
+
+    } else if (service_name == "/move_hand_relative_srv") {
+        ros::ServiceClient client = nh_->serviceClient<hand_planner::PickAndMove>(service_name);
+        hand_planner::PickAndMove srv;
+        srv.request.axes = params["axes"].as<std::vector<std::string>>();
+        srv.request.deltas = params["deltas"].as<std::vector<double>>();
+        srv.request.durations = params["durations"].as<std::vector<double>>();
+        if (!client.call(srv)) { ROS_ERROR("Service call to %s failed.", service_name.c_str()); return false; }
+        return srv.response.ok;
+
+    } else if (service_name == "/write_string_srv") {
+        ros::ServiceClient client = nh_->serviceClient<hand_planner::WriteString>(service_name);
+        hand_planner::WriteString srv;
+        srv.request.data = params["data"].as<std::string>();
+        if (!client.call(srv)) { ROS_ERROR("Service call to %s failed.", service_name.c_str()); return false; }
+        return srv.response.success;
+
     } else if (service_name == "/joint_command") {
         ros::ServiceClient client = nh_->serviceClient<gait_planner::command>(service_name);
         gait_planner::command srv;
@@ -164,6 +238,86 @@ bool RobotManager::execute_step(const YAML::Node& step) {
         return false;
     }
 }
+
+void RobotManager::publishTriggerCallback(const std_msgs::Empty::ConstPtr& msg) {
+    ROS_DEBUG("Received publish trigger. Publishing combined commands.");
+    publishCombinedMotorCommands(); 
+}
+
+void RobotManager::publishCombinedMotorCommands() {
+    // Get commands from GaitManager (lower body)
+    const double* gait_motor_commands = gait_manager_->getGaitMotorCommands();
+    const double* gait_gazebo_commands = gait_manager_->getGaitGazeboCommands();
+
+    // Get commands from HandManager (upper body and head)
+    const std::vector<double>& hand_motor_commands = hand_manager_->getHandMotorCommands();
+    const std::vector<double>& hand_gazebo_commands = hand_manager_->getHandGazeboCommands();
+
+    // Get commands from FingerControl (hands)
+    const std::vector<double>& finger_motor_commands = hand_manager_->getFingerMotorCommands();    
+
+    if (!simulation) { 
+        combined_motor_command_msg_.data.clear();
+
+        for (int i = 0; i < 12; ++i) {
+            combined_motor_command_msg_.data.push_back(gait_motor_commands[i]);
+        }
+        for (int i = 12; i < 29; ++i) {
+            combined_motor_command_msg_.data.push_back(hand_motor_commands[i]);
+        }
+        for (int i = 0; i < 17; ++i) {
+            combined_motor_command_msg_.data.push_back(finger_motor_commands[i]);
+        }
+
+        if (gait_motor_commands[12] != 0) { // If GaitManager provides a value for Right Arm Shoulder Yaw
+            combined_motor_command_msg_.data[12] += gait_motor_commands[12];
+        }
+        if (gait_motor_commands[16] != 0) { // If GaitManager provides a value for Left Arm Shoulder Yaw
+            combined_motor_command_msg_.data[16] += gait_motor_commands[16];
+        }
+
+        combined_motor_pub_.publish(combined_motor_command_msg_);
+
+        // for (size_t i = 0; i < combined_motor_command_msg_.data.size(); ++i) {
+        //     std::cout << combined_motor_command_msg_.data[i];
+        //     if (i < combined_motor_command_msg_.data.size() - 1) std::cout << ", ";
+        // }
+        // std::cout << std::endl;
+
+    } else { // Gazebo Simulation (radians)
+        combined_gazebo_command_msg_.data.clear();
+
+        // Copy lower body commands from GaitManager (0-11)
+        for (int i = 0; i < 12; ++i) {
+            combined_gazebo_command_msg_.data.push_back(gait_gazebo_commands[i]);
+        }
+        // Copy upper body commands (including head and wrists) from HandManager (12-28)
+
+        for (int i = 12; i < 29; ++i) {
+            combined_gazebo_command_msg_.data.push_back(hand_gazebo_commands[i]);
+        }
+
+        for (int i = 0; i < 17; ++i) {
+            combined_gazebo_command_msg_.data.push_back(finger_motor_commands[i]);
+        }
+
+        if (gait_gazebo_commands[12] != 0.0) {
+            combined_gazebo_command_msg_.data[12] = gait_gazebo_commands[12];
+        }
+        if (gait_gazebo_commands[16] != 0.0) {
+            combined_gazebo_command_msg_.data[16] = gait_gazebo_commands[16];
+        }
+
+        combined_gazebo_pub_.publish(combined_gazebo_command_msg_);
+        
+        // for (size_t i = 0; i < combined_gazebo_command_msg_.data.size(); ++i) {
+        //     std::cout << combined_gazebo_command_msg_.data[i];
+        //     if (i < combined_gazebo_command_msg_.data.size() - 1) std::cout << ", ";
+        // }
+        // std::cout << std::endl;
+    }
+}
+
 
 // --- Main Function ---
 int main(int argc, char **argv) {

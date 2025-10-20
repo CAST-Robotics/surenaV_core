@@ -21,6 +21,7 @@
 
 // msgs & srvs
 #include <std_srvs/Empty.h>
+#include <std_msgs/Empty.h>
 #include <std_msgs/Int32.h>
 #include <std_msgs/Int32MultiArray.h>
 #include <std_msgs/Float64MultiArray.h>
@@ -46,9 +47,11 @@ class HandManager {
 public:
     HandManager(ros::NodeHandle *n);
 
+    const std::vector<double>& getHandMotorCommands() const;
+    const std::vector<double>& getHandGazeboCommands() const;
+    const std::vector<double>& getFingerMotorCommands() const;
+
 private:
-    ros::Publisher trajectory_data_pub;
-    ros::Publisher gazeboJointStatePub_;
     ros::Subscriber camera_data_sub;
     ros::Subscriber joint_qc_sub;
     ros::Subscriber teleoperation_data_sub;
@@ -69,6 +72,8 @@ private:
     ros::ServiceServer finger_scenario_service_;
     ros::ServiceServer arm_back_to_home_service_;
     ros::ServiceServer arm_home_service_;
+    ros::Publisher publish_trigger_pub_;
+    ros::Subscriber hand_keyboard_sub_;
   
     ros::WallTime hand_keyboard_last_input_;
     double hand_step_T_ = 1.0;
@@ -92,6 +97,9 @@ private:
     VectorXd next_ini_ee_posL;
     vector<double> last_q_gazebo;
     vector<double> last_q_motor;
+    vector<double> hand_motor_commands_ = std::vector<double>(29, 0);
+    vector<double> hand_gazebo_commands_ = std::vector<double>(29, 0.0);
+    mutable std::mutex command_mutex_;
     Vector2d right_wrist_res_temp;
 
     
@@ -113,11 +121,12 @@ private:
 
     double T;
     int rate;
-    bool simulation;
     bool right_state_init_;
     bool left_state_init_;
 
-    bool hand_keyboard_enabled_ =false;
+    bool hand_keyboard_enabled_ = false;
+    bool isHandKeyboardTrajectoryEnabled = false;
+    bool isHandKeyboardActive = false;
     int encoderResolution[2];
     int harmonicRatio[4];
     vector<int> pitch_range, roll_range, yaw_range;
@@ -140,7 +149,7 @@ private:
     void micArray_callback(const std_msgs::Float64 &msg);
     void hand_keyboard_callback(const std_msgs::Int32::ConstPtr& msg);
     void hallSensorCallback(const std_msgs::Int32& msg);
-    void publishMotorData(const VectorXd& q_rad_right, const VectorXd& q_rad_left, const Vector3d& head_angles);
+    void sendHandMotorCommands(const VectorXd& q_rad_right, const VectorXd& q_rad_left, const Vector3d& head_angles);
 
     MatrixXd scenario_target(HandType type, string scenario, int i, VectorXd ee_pos, string ee_ini_pos);
     VectorXd reach_target(S5_hand& hand_model, VectorXd& q_arm, MatrixXd& qref_arm, double& sum_arm, VectorXd& q_init_arm, MatrixXd targets, string scenario, int M);
