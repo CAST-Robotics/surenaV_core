@@ -73,7 +73,6 @@ private:
     ros::ServiceServer arm_back_to_home_service_;
     ros::ServiceServer arm_home_service_;
     ros::Publisher publish_trigger_pub_;
-    ros::Subscriber hand_keyboard_sub_;
   
     ros::WallTime hand_keyboard_last_input_;
     double hand_step_T_ = 1.0;

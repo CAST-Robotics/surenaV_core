@@ -380,12 +380,12 @@ void HandManager::sendHandMotorCommands(const VectorXd& q_rad_right, const Vecto
 
     Vector2d wrist_res = hand_func_R.solve_wrist(q_rad_right(5)*180/M_PI, q_rad_right(6)*180/M_PI); // (motor 25 (A), motor 24 (B))
     if(int(wrist_res(1)) != -1){
-        q_motor[24] = int(wrist_res(0));
-        q_motor[25] = int(wrist_res(1));
+        q_motor_temp[24] = int(wrist_res(0));
+        q_motor_temp[25] = int(wrist_res(1));
         right_wrist_res_temp = wrist_res;
     } else {
-        q_motor[24] = int(right_wrist_res_temp(0));
-        q_motor[25] = int(right_wrist_res_temp(1));
+        q_motor_temp[24] = int(right_wrist_res_temp(0));
+        q_motor_temp[25] = int(right_wrist_res_temp(1));
     }
 
     // Wrist calculations for left hand (indices 26-28)
