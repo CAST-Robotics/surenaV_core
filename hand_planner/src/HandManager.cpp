@@ -455,7 +455,6 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             q_ra << 10.0*M_PI/180.0, -10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
         }
         q_init_r = q_ra;
-        q_right_baseline_ = q_right_state_;
         if (q_right_baseline_.size() != 7) q_right_baseline_ = q_init_r;
 
         hand_func_R.HO_FK_palm(q_ra);
@@ -574,7 +573,6 @@ bool HandManager::both_hands(hand_planner::move_hand_both::Request &req, hand_pl
         q_ra << 10.0*M_PI/180.0, -10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
     }
     q_init_r = q_ra;
-    q_right_baseline_ = q_right_state_;
     if (q_right_baseline_.size() != 7) q_right_baseline_ = q_init_r;
     hand_func_R.HO_FK_palm(q_ra);
     next_ini_ee_posR = hand_func_R.r_palm;
@@ -659,7 +657,7 @@ bool HandManager::grip_online(hand_planner::gripOnline::Request &req, hand_plann
     Eigen::Matrix3d R_target_r = Matrix3d::Identity();
 
     t_grip = 0;
-    while (t_grip <= (120)) {
+    while (t_grip <= (60)) {
         Vector3d target2camera(X, Y, Z);
         MatrixXd T_CAM2SH = hand_func_R.ObjToNeck(-h_pitch, h_roll, -h_yaw);
         Vector3d target2shoulder = T_CAM2SH.block(0, 3, 3, 1) + T_CAM2SH.block(0, 0, 3, 3) * target2camera;
@@ -742,7 +740,6 @@ bool HandManager::head_track_handler(hand_planner::head_track::Request &req, han
             q_right.resize(7);
             q_right << 10.0*M_PI/180.0, -10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
         }
-        q_right_baseline_ = q_right_state_;
         if (q_right_baseline_.size() != 7) {
             q_right_baseline_ = q_right;
         }
@@ -783,7 +780,6 @@ bool HandManager::write_string_handler(hand_planner::WriteString::Request &req,
     VectorXd q(7);
     if (q_right_state_.size()==7) q = q_right_state_;
     else q << 10*M_PI/180.0, -10*M_PI/180.0, 0, -25*M_PI/180.0, 0, 0, 0;
-    q_right_baseline_ = q_right_state_;
     if (q_right_baseline_.size()!=7) q_right_baseline_ = q;
 
     Vector3d r_target(0.45, 0.02, 0.03);
@@ -824,7 +820,6 @@ bool HandManager::move_hand_relative_handler(hand_planner::PickAndMove::Request 
     VectorXd q(7);
     if (q_right_state_.size()==7) q = q_right_state_;
     else q << 10*M_PI/180.0, -10*M_PI/180.0, 0, -25*M_PI/180.0, 0, 0, 0;
-    q_right_baseline_ = q_right_state_;
     if (q_right_baseline_.size()!=7) q_right_baseline_ = q;
 
     Matrix3d R_pick = hand_func_R.rot(2, -100.0*M_PI/180.0, 3);
@@ -1029,7 +1024,6 @@ bool HandManager::move_hand_general_handler(hand_planner::MoveHandGeneral::Reque
         q.resize(7);
         q << 10.0*M_PI/180.0, -10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
     }
-    q_right_baseline_ = q_right_state_;
     if (q_right_baseline_.size() != 7) {
         q_right_baseline_ = q;
     }
