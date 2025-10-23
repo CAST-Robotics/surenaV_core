@@ -378,7 +378,7 @@ void HandManager::sendHandMotorCommands(const VectorXd& q_rad_right, const Vecto
     // q_motor_temp[25] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
     //                     (((hand_func_R.wrist_left_calc(q_rad_right(5), q_rad_right(6))) - wrist_left_range[0]) / (wrist_left_range[1] - wrist_left_range[0])));
 
-    Vector2d wrist_res = hand_func_R.solve_wrist(q_rad_right(5)*180/M_PI, q_rad_right(6)*180/M_PI); // (motor 25 (A), motor 24 (B))
+    Vector2d wrist_res = hand_func_R.solve_wrist(-q_rad_right(5)*180/M_PI, q_rad_right(6)*180/M_PI); // (motor 25 (A), motor 24 (B))
     if(int(wrist_res(1)) != -1){
         q_motor_temp[24] = int(wrist_res(0));
         q_motor_temp[25] = int(wrist_res(1));
@@ -673,7 +673,7 @@ bool HandManager::grip_online(hand_planner::gripOnline::Request &req, hand_plann
             h_yaw = max(-60.0*M_PI/180, min(60.0*M_PI/180, h_yaw));
         }
 
-        if (t_grip >= 15 && Y != 0 && Z != 0) {
+        if (t_grip >= 15) {
         R_target_r = hand_func_R.rot(2, -65 * M_PI / 180, 3);
         hand_func_R.update_hand(current_q_ra, Vector3d::Zero(), target2shoulder, R_target_r);
         Vector3d V_r = 0.7 * (target2shoulder - hand_func_R.r_palm);
