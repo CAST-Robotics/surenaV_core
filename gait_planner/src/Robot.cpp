@@ -194,7 +194,7 @@ void Robot::runFootLenController(double f_l, double f_r, ControlState robot_cs)
         distributeFT(currentZMPPos_, currentCommandedRightAnklePos_, currentCommandedLeftAnklePos_, r_wrench, l_wrench);
         deltaFd = floor((l_wrench(0) - r_wrench(0)) * 10) / 10;
     }
-    double delta_z = onlineWalk_->footLenController(deltaFd, floor((f_l - f_r) * 10) / 10, 0.00012, 0.0, 1.0);
+    double delta_z = onlineWalk_->footLenController(deltaFd, floor((f_l - f_r) * 10) / 10, 0.00011, 0.0, 1.0);
     currentCommandedLeftAnklePos_(2) -= 0.5 * delta_z;
     currentCommandedRightAnklePos_(2) += 0.5 * delta_z;
 }

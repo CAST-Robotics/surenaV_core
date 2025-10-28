@@ -219,16 +219,19 @@ MatrixXd HandManager::scenario_target(HandType type, string scenario, int i, Vec
         R_target = hand_func.rot(3, 90 * M_PI / 180, 3) * hand_func.rot(1, -160 * M_PI / 180, 3);
     } else if (scenario == "punching") {
         r_middle = (type == RIGHT) ? Vector3d(0.15, -0.1, -0.1) : Vector3d(0.15, 0.1, -0.1);
-        r_target = (type == RIGHT) ? Vector3d(0.35, 0.2, 0.1) : Vector3d(0.35, -0.2, 0.1);
-        R_target = hand_func.rot(3, 90 * M_PI / 180, 3) * hand_func.rot(1, -40 * M_PI / 180, 3);
+        r_target = (type == RIGHT) ? Vector3d(0.35, 0.1, 0.1) : Vector3d(0.35, -0.1, 0.1);
+        double rot_angle = (type == RIGHT) ? 90 * M_PI / 180 : -90 * M_PI / 180;
+        R_target = hand_func.rot(3, rot_angle, 3) * hand_func.rot(1, -0 * M_PI / 180, 3);
     } else if (scenario == "perfect") {
         r_middle = (type == RIGHT) ? Vector3d(0.15, -0.1, -0.3) : Vector3d(0.15, 0.1, -0.3);
-        r_target = (type == RIGHT) ? Vector3d(0.25, -0.05, -0.25) : Vector3d(0.25, 0.05, -0.25);
-        R_target = hand_func.rot(2, -90 * M_PI / 180, 3) * hand_func.rot(3, 90 * M_PI / 180, 3) * hand_func.rot(1, -45 * M_PI / 180, 3);
+        r_target = (type == RIGHT) ? Vector3d(0.25, -0.05, -0.25) : Vector3d(0.25, 0.15, -0.15);
+        double rot_angle = (type == RIGHT) ? -45 * M_PI / 180 : 45 * M_PI / 180;
+        R_target = hand_func.rot(2, -90 * M_PI / 180, 3) * hand_func.rot(3, 90 * M_PI / 180, 3) * hand_func.rot(1, rot_angle, 3);
     } else if (scenario == "pointing") {
         r_middle = (type == RIGHT) ? Vector3d(0.25, -0.1, -0.1) : Vector3d(0.25, 0.1, -0.1);
-        r_target = (type == RIGHT) ? Vector3d(0.45, 0.05, 0.0) : Vector3d(0.45, -0.05, 0.0);
-        R_target = hand_func.rot(3, 90 * M_PI / 180, 3) * hand_func.rot(1, -65 * M_PI / 180, 3);
+        r_target = (type == RIGHT) ? Vector3d(0.45, 0.05, 0.0) : Vector3d(0.45, -0.05, 0.05); // fix left hand
+        double rot_angle = (type == RIGHT) ? 90 * M_PI / 180 : -90 * M_PI / 180;
+        R_target = hand_func.rot(3, rot_angle, 3) * hand_func.rot(1, -65 * M_PI / 180, 3);
     } else if (scenario == "like") {
         r_middle = (type == RIGHT) ? Vector3d(0.15, -0.1, -0.3) : Vector3d(0.15, 0.1, -0.3);
         r_target = (type == RIGHT) ? Vector3d(0.25, -0.05, -0.25) : Vector3d(0.25, 0.05, -0.25);
@@ -507,7 +510,7 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             q_la << 10.0*M_PI/180.0, 10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
         }
         q_init_l = q_la;
-        q_left_baseline_ = q_left_state_;
+        //q_left_baseline_ = q_left_state_;
 
         if (q_left_baseline_.size() != 7) q_left_baseline_ = q_init_l;
 
