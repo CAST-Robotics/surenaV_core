@@ -68,6 +68,7 @@ add_service_files(
   WriteString.srv
   PickAndMove.srv
   KeyboardJog.srv
+  headkeyboardjog.srv
   MoveHandGeneral.srv
   FingerControl.srv
   FingerScenario.srv

@@ -64,6 +64,7 @@ HandManager::HandManager(ros::NodeHandle *n) :
     micArray_data_sub            = n->subscribe("micarray/angle", 100, &HandManager::micArray_callback, this);
     hall_sensor_sub_             = n->subscribe("/surena/hall_state", 1, &HandManager::hallSensorCallback, this);
     hand_keyboard_sub_           = n->subscribe("/keyboard_command", 10, &HandManager::hand_keyboard_callback, this);
+    head_keyboard_sub_           = n->subscribe("/keyboard_command", 10, &HandManager::head_keyboard_callback, this);
     move_hand_single_service     = n->advertiseService("move_hand_single_srv", &HandManager::single_hand, this);
     move_hand_both_service       = n->advertiseService("move_hand_both_srv", &HandManager::both_hands, this);
     grip_online_service          = n->advertiseService("grip_online_srv", &HandManager::grip_online, this);
@@ -73,6 +74,7 @@ HandManager::HandManager(ros::NodeHandle *n) :
     write_string_service_        = n->advertiseService("write_string_srv", &HandManager::write_string_handler, this);
     move_hand_relative_service_  = n->advertiseService("move_hand_relative_srv", &HandManager::move_hand_relative_handler, this);
     move_hand_keyboard_service_  = n->advertiseService("move_hand_keyboard_srv", &HandManager::move_hand_keyboard_handler, this);
+    move_head_keyboard_service_  = n->advertiseService("move_head_keyboard_srv", &HandManager::move_head_keyboard_handler, this);
     move_hand_general_service_   = n->advertiseService("move_hand_general_srv", &HandManager::move_hand_general_handler, this);
     arm_back_to_home_service_    = n->advertiseService("arm_back_to_home_srv", &HandManager::arm_back_to_home_handler, this);
     finger_control_service_      = n->advertiseService("finger_control_srv", &HandManager::fingerControlService, this);
@@ -1048,6 +1050,109 @@ void HandManager::hand_keyboard_callback(const std_msgs::Int32::ConstPtr& msg)
     hand_keyboard_last_input_ = ros::WallTime::now();
 }
 
+
+void HandManager::head_keyboard_callback(const std_msgs::Int32::ConstPtr& msg)
+{
+    if (!isHeadKeyboardActive) {
+        return;
+    }
+
+    const double HEAD_ANGLE_INCREMENT_DEGREES = 5.0;
+    const double HEAD_ANGLE_INCREMENT_RAD = HEAD_ANGLE_INCREMENT_DEGREES * M_PI / 180.0; 
+
+    static const double YAW_MIN_RAD   = -60.0 * M_PI / 180.0;
+    static const double YAW_MAX_RAD   =  60.0 * M_PI / 180.0;
+    static const double PITCH_MIN_RAD = -28.0 * M_PI / 180.0;
+    static const double PITCH_MAX_RAD =  28.0 * M_PI / 180.0;
+
+    auto clamp = [](double v, double lo, double hi){ return std::max(lo,std::min(hi,v)); };
+
+    int key_code = msg->data; 
+
+    if (key_code == 27) { // ASCII code for ESC key
+        isHeadKeyboardActive = false; 
+        return; 
+    }
+
+    bool command_processed = false; 
+
+    switch (key_code) {
+        case 105: 
+            h_pitch += HEAD_ANGLE_INCREMENT_RAD;
+            command_processed = true;
+            break;
+        case 107: 
+            h_pitch -= HEAD_ANGLE_INCREMENT_RAD;
+            command_processed = true;
+            break;
+        case 106: 
+            h_yaw += HEAD_ANGLE_INCREMENT_RAD;
+            command_processed = true;
+            break;
+        case 108: 
+            h_yaw -= HEAD_ANGLE_INCREMENT_RAD;
+            command_processed = true;
+            break;
+        default:
+            return;
+    }
+
+    h_pitch = clamp(h_pitch, PITCH_MIN_RAD, PITCH_MAX_RAD);
+    h_yaw   = clamp(h_yaw,   YAW_MIN_RAD,   YAW_MAX_RAD);
+
+    Eigen::VectorXd q_left(7);
+    if (q_left_state_.size()==7){
+        q_left = q_left_state_;
+    } else {
+        q_left.resize(7);
+        q_left << 10.0*M_PI/180.0, 10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
+    }
+    if (q_left_baseline_.size() != 7) {
+        q_left_baseline_ = q_left;
+    }
+
+    Eigen::VectorXd q_right(7);
+    if (q_right_state_.size()==7){
+        q_right = q_right_state_;
+    } else {
+        q_right.resize(7);
+        q_right << 10.0*M_PI/180.0, -10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
+    }
+    if (q_right_baseline_.size() != 7) {
+        q_right_baseline_ = q_right;
+    }
+
+    Eigen::VectorXd q_right_send = q_right;
+    q_right_send.head(4) = q_right_send.head(4) - q_right_baseline_.head(4);
+        
+    Eigen::VectorXd q_left_send = q_left;
+    q_left_send.head(4) = q_left_send.head(4) - q_left_baseline_.head(4);
+
+    Vector3d head_angles(h_roll, h_pitch, h_yaw);
+    sendHandMotorCommands(q_right_send, q_left_send, head_angles);
+    publish_trigger_pub_.publish(std_msgs::Empty());    
+}
+
+
+
+bool HandManager::move_head_keyboard_handler(hand_planner::headkeyboardjog::Request &req,
+                                            hand_planner::headkeyboardjog::Response &res)
+{
+
+    isHeadKeyboardActive = true;
+    ros::Rate loop_rate(rate);
+    while (ros::ok() && isHeadKeyboardActive)
+    {
+        ros::spinOnce(); 
+        loop_rate.sleep();
+    }
+
+    isHeadKeyboardActive = false;
+    res.success = true;
+    res.message = "Head keyboard control stopped.";
+    ROS_INFO("%s", res.message.c_str());
+    return true;
+}
 
 
 bool HandManager::move_hand_keyboard_handler(hand_planner::KeyboardJog::Request &req,

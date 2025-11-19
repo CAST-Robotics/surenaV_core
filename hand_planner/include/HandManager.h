@@ -34,6 +34,7 @@
 #include "hand_planner/WriteString.h"
 #include "hand_planner/PickAndMove.h"
 #include "hand_planner/KeyboardJog.h"
+#include "hand_planner/headkeyboardjog.h"
 #include "hand_planner/MoveHandGeneral.h"
 #include "hand_planner/FingerControl.h"
 #include "hand_planner/FingerScenario.h"
@@ -57,6 +58,7 @@ private:
     ros::Subscriber teleoperation_data_sub;
     ros::Subscriber micArray_data_sub;
     ros::Subscriber hand_keyboard_sub_;
+    ros::Subscriber head_keyboard_sub_;
     ros::Subscriber hall_sensor_sub_;
     ros::ServiceServer move_hand_single_service;
     ros::ServiceServer move_hand_both_service;
@@ -67,6 +69,7 @@ private:
     ros::ServiceServer write_string_service_;
     ros::ServiceServer move_hand_relative_service_;
     ros::ServiceServer move_hand_keyboard_service_;
+    ros::ServiceServer move_head_keyboard_service_;
     ros::ServiceServer move_hand_general_service_;
     ros::ServiceServer finger_control_service_;
     ros::ServiceServer finger_scenario_service_;
@@ -125,6 +128,7 @@ private:
 
     bool hand_keyboard_enabled_ = false;
     bool isHandKeyboardTrajectoryEnabled = false;
+    bool isHeadKeyboardActive = false;
     bool isHandKeyboardActive = false;
     int encoderResolution[2];
     int harmonicRatio[4];
@@ -147,6 +151,7 @@ private:
     void teleoperation_callback(const std_msgs::Float64MultiArray &q_deg_teleop);
     void micArray_callback(const std_msgs::Float64 &msg);
     void hand_keyboard_callback(const std_msgs::Int32::ConstPtr& msg);
+    void head_keyboard_callback(const std_msgs::Int32::ConstPtr& msg);
     void hallSensorCallback(const std_msgs::Int32& msg);
     void sendHandMotorCommands(const VectorXd& q_rad_right, const VectorXd& q_rad_left, const Vector3d& head_angles);
 
@@ -163,6 +168,7 @@ private:
     bool write_string_handler(hand_planner::WriteString::Request &req, hand_planner::WriteString::Response &res);
     bool move_hand_relative_handler(hand_planner::PickAndMove::Request &req, hand_planner::PickAndMove::Response &res);
     bool move_hand_keyboard_handler(hand_planner::KeyboardJog::Request &req, hand_planner::KeyboardJog::Response &res);
+    bool move_head_keyboard_handler(hand_planner::headkeyboardjog::Request &req, hand_planner::headkeyboardjog::Response &res);
     bool move_hand_general_handler(hand_planner::MoveHandGeneral::Request &req, hand_planner::MoveHandGeneral::Response &res);
     bool arm_home_service_handler(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
     
