@@ -3,7 +3,7 @@
 // --- CONSTRUCTOR ---
 RobotManager::RobotManager(ros::NodeHandle *n) : 
     nh_(n),
-    simulation(false)
+    simulation(true)
 {
     hand_manager_ = std::make_unique<HandManager>(nh_);
     gait_manager_ = std::make_unique<GaitManager>(nh_);
@@ -327,7 +327,7 @@ int main(int argc, char **argv) {
     ROS_INFO("Robot Manager is running and ready to execute commands and scenarios.");
     // Create an AsyncSpinner.
     // The '2' means it will create a pool of 2 threads to process callbacks and prevent deadlocks (one for the scenario client, one for the service provider). You can increase this if needed.
-    ros::AsyncSpinner spinner(2);
+    ros::AsyncSpinner spinner(4);
     spinner.start();
     ros::waitForShutdown(); // replacement of the old ros::spin().
     return 0;

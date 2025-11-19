@@ -63,7 +63,7 @@ scenarios:
       params:
         start: "begin"
 
-  # Scenario 3: Exhibition
+  # Scenario 4: Exhibition
   exhibition:
     - service: "/move_hand_single_srv"
       blocking: true
@@ -100,3 +100,19 @@ scenarios:
       blocking: true
       params:
         seq: "js"
+  # Scenario 5: Showhands
+  Showhands:
+    - service: "/move_hand_single_srv"
+      blocking: true
+      params:
+        mode: "righthand"
+        ee_ini_pos: "init"
+        scenario: ["like"]
+        scen_count: 1
+        t_total: 4
+    - service: "/move_hand_general_srv"
+      blocking: true
+      params:
+        commands:
+          - "rel  0.05 0 0  0 0 0"
+        go_home_on_finish: false
