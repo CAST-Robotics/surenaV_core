@@ -71,6 +71,7 @@ private:
     ros::ServiceServer move_hand_keyboard_service_;
     ros::ServiceServer move_head_keyboard_service_;
     ros::ServiceServer move_hand_general_service_;
+    ros::ServiceServer move_hand_general_left_service_;
     ros::ServiceServer finger_control_service_;
     ros::ServiceServer finger_scenario_service_;
     ros::ServiceServer arm_back_to_home_service_;
@@ -170,6 +171,7 @@ private:
     bool move_hand_keyboard_handler(hand_planner::KeyboardJog::Request &req, hand_planner::KeyboardJog::Response &res);
     bool move_head_keyboard_handler(hand_planner::headkeyboardjog::Request &req, hand_planner::headkeyboardjog::Response &res);
     bool move_hand_general_handler(hand_planner::MoveHandGeneral::Request &req, hand_planner::MoveHandGeneral::Response &res);
+    bool move_hand_general_left_handler(hand_planner::MoveHandGeneral::Request &req, hand_planner::MoveHandGeneral::Response &res);
     bool arm_home_service_handler(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
     
     // Finger control services

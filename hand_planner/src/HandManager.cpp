@@ -76,6 +76,7 @@ HandManager::HandManager(ros::NodeHandle *n) :
     move_hand_keyboard_service_  = n->advertiseService("move_hand_keyboard_srv", &HandManager::move_hand_keyboard_handler, this);
     move_head_keyboard_service_  = n->advertiseService("move_head_keyboard_srv", &HandManager::move_head_keyboard_handler, this);
     move_hand_general_service_   = n->advertiseService("move_hand_general_srv", &HandManager::move_hand_general_handler, this);
+    move_hand_general_left_service_   = n->advertiseService("move_hand_general_left_srv", &HandManager::move_hand_general_left_handler, this);
     arm_back_to_home_service_    = n->advertiseService("arm_back_to_home_srv", &HandManager::arm_back_to_home_handler, this);
     finger_control_service_      = n->advertiseService("finger_control_srv", &HandManager::fingerControlService, this);
     finger_scenario_service_     = n->advertiseService("finger_scenario_srv", &HandManager::fingerScenarioService, this);
@@ -1342,6 +1343,132 @@ bool HandManager::move_hand_general_handler(hand_planner::MoveHandGeneral::Reque
     res.message = user_exit ? "exit" : "done";
     return true;
 }
+
+
+bool HandManager::move_hand_general_left_handler(hand_planner::MoveHandGeneral::Request &req,
+                                            hand_planner::MoveHandGeneral::Response &res)
+{
+    using Eigen::Vector3d;
+    using Eigen::VectorXd;
+    using Eigen::Matrix3d;
+
+    VectorXd q(7);
+    if (q_left_state_.size() == 7) {
+        q = q_left_state_;
+    } else {
+        q.resize(7);
+        q << 10.0*M_PI/180.0, 10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
+    }
+    if (q_left_baseline_.size() != 7) {
+        q_left_baseline_ = q;
+    }
+
+    Eigen::VectorXd q_right(7);
+    if (q_right_state_.size()==7){
+        q_right = q_right_state_;
+    } else {
+        q_right.resize(7);
+        q_right << 10.0*M_PI/180.0, -10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
+    }
+    if (q_right_baseline_.size() != 7) {
+        q_right_baseline_ = q_right;
+    }
+
+    auto pub = [&](const VectorXd& q_abs){
+        VectorXd q_send = q_abs;
+        q_send.head(4) = q_abs.head(4) - q_left_baseline_.head(4);
+        Eigen::VectorXd q_right_send = q_right;
+        q_right_send.head(4) = q_right_send.head(4) - q_right_baseline_.head(4);
+        sendHandMotorCommands(q_right_send, q_send, Vector3d(0,0,0));
+        publish_trigger_pub_.publish(std_msgs::Empty());
+    };
+
+    const double T1 = 3.0, T2 = 3.0;
+    bool user_exit = false;
+
+    auto trim = [](std::string &s){
+        while (!s.empty() && std::isspace((unsigned char)s.back())) s.pop_back();
+        size_t i=0; while (i<s.size() && std::isspace((unsigned char)s[i])) ++i;
+        s = s.substr(i);
+    };
+
+    for (const std::string& raw : req.commands) {
+        std::string line = raw;
+        trim(line);
+        if (line.empty()) continue;
+        if (line.size()==1 && (line[0]=='x' || line[0]=='X')) { user_exit = true; break; }
+
+        std::istringstream iss(line);
+        std::string mode; 
+        if (!(iss >> mode)) continue;
+
+        std::vector<double> vals; 
+        double tmp; 
+        while (iss >> tmp) vals.push_back(tmp);
+
+        bool is_abs = (mode=="abs" || mode=="ABS");
+
+        double mx=0, my=0, mz=0, gx=0, gy=0, gz=0, rx=0, ry=0, rz=0;
+        bool have_mid = false;
+
+        if (is_abs) {
+            if (vals.size() == 9) {
+                have_mid = true;
+                mx = vals[0]; my = vals[1]; mz = vals[2];
+                gx = vals[3]; gy = vals[4]; gz = vals[5];
+                rx = vals[6]; ry = vals[7]; rz = vals[8];
+            } else if (vals.size() == 6) {
+                have_mid = false;
+                gx = vals[0]; gy = vals[1]; gz = vals[2];
+                rx = vals[3]; ry = vals[4]; rz = vals[5];
+            } else {
+                continue;
+            }
+        } else {
+            if (vals.size() != 6) continue;
+            gx = vals[0]; gy = vals[1]; gz = vals[2];
+            rx = vals[3]; ry = vals[4]; rz = vals[5];
+        }
+
+        hand_func_L.HO_FK_palm(q);
+        Vector3d r0 = hand_func_L.r_palm;
+        Matrix3d R0 = hand_func_L.R_palm.block<3,3>(0,0);
+
+        const double RX = rx * M_PI/180.0;
+        const double RY = ry * M_PI/180.0;
+        const double RZ = rz * M_PI/180.0;
+
+        Matrix3d R_inc = hand_func_L.rot(2, RY, 3)
+                       * hand_func_L.rot(1, RX, 3)
+                       * hand_func_L.rot(3, RZ, 3);
+
+        Vector3d r_goal, mid;
+        Matrix3d R_goal;
+
+        if (is_abs) {
+            r_goal = Vector3d(gx, gy, gz);
+            mid    = have_mid ? Vector3d(mx, my, mz) : 0.5*(r0 + r_goal);
+            R_goal = R_inc;                
+        } else {
+            r_goal = r0 + Vector3d(gx, gy, gz);
+            mid    = 0.5*(r0 + r_goal);   
+            R_goal = R0 * R_inc;          
+        }
+
+        if (!approachViaOneMid(hand_func_L, coef_generator, q, mid, r_goal, R_goal, T1, T2, T, pub)) {
+            res.ok = false; 
+            res.message = "approach failed";
+            q_left_state_ = q;
+            return true;
+        }
+    }
+
+    q_left_state_ = q;
+    res.ok = true; 
+    res.message = user_exit ? "exit" : "done";
+    return true;
+}
+
 
 bool HandManager::arm_back_to_home_handler(hand_planner::arm_back_to_home::Request &req,
                                            hand_planner::arm_back_to_home::Response &res)

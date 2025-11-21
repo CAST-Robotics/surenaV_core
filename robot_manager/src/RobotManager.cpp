@@ -3,7 +3,7 @@
 // --- CONSTRUCTOR ---
 RobotManager::RobotManager(ros::NodeHandle *n) : 
     nh_(n),
-    simulation(true)
+    simulation(false)
 {
     hand_manager_ = std::make_unique<HandManager>(nh_);
     gait_manager_ = std::make_unique<GaitManager>(nh_);
