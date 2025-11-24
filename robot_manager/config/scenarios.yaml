@@ -107,12 +107,70 @@ scenarios:
       params:
         mode: "righthand"
         ee_ini_pos: "init"
-        scenario: ["like"]
+        scenario: ["showHands"]
         scen_count: 1
         t_total: 4
+    - service: "/get_data"
+      blocking: true
+      params:
+        time: 1
     - service: "/move_hand_general_srv"
       blocking: true
       params:
         commands:
-          - "rel  0.05 0 0  0 0 0"
+          - "rel  -0.05 0 0.1  0 0 0"
+        go_home_on_finish: false
+    - service: "/get_data"
+      blocking: true
+      params:
+        time: 1
+    - service: "/move_hand_general_srv"
+      blocking: true
+      params:
+        commands:
+          - "rel  0 0.1 0  0 0 140"
+        go_home_on_finish: false
+    - service: "/get_data"
+      blocking: true
+      params:
+        time: 1
+    - service: "/move_hand_both_srv"
+      blocking: true
+      params:
+        ee_ini_posR: "a"
+        scenarioR: ["home"]
+        scenR_count: 1
+        ee_ini_posL: "a"
+        scenarioL: ["showHands"]
+        scenL_count: 1
+        t_total: 4
+    - service: "/get_data"
+      blocking: true
+      params:
+        time: 2
+    - service: "/move_hand_general_left_srv"
+      blocking: true
+      params:
+        commands:
+          - "rel  0.05 0.05 0  0 0 -20"
+        go_home_on_finish: false
+    - service: "/get_data"
+      blocking: true
+      params:
+        time: 2
+    - service: "/move_hand_general_left_srv"
+      blocking: true
+      params:
+        commands:
+          - "rel  0 0 0  0 0 40"
+        go_home_on_finish: false
+    - service: "/get_data"
+      blocking: true
+      params:
+        time: 2
+    - service: "/move_hand_general_left_srv"
+      blocking: true
+      params:
+        commands:
+          - "rel  0 0 0  0 0 -20"
         go_home_on_finish: false
