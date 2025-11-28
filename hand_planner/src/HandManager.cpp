@@ -56,6 +56,8 @@ HandManager::HandManager(ros::NodeHandle *n) :
     R_left_state_.setIdentity();
     left_state_init_ = true;
 
+    sendHandMotorCommands(VectorXd::Zero(7), VectorXd::Zero(7), Vector3d::Zero());
+
     // ROS Communication Setup
     publish_trigger_pub_         = n->advertise<std_msgs::Empty>("robot_manager/publish_trigger", 1);
     camera_data_sub              = n->subscribe("/detection_info", 1, &HandManager::object_detect_callback, this);
@@ -232,7 +234,7 @@ MatrixXd HandManager::scenario_target(HandType type, string scenario, int i, Vec
         R_target = hand_func.rot(2, -90 * M_PI / 180, 3) * hand_func.rot(3, 90 * M_PI / 180, 3) * hand_func.rot(1, rot_angle, 3);
     } else if (scenario == "pointing") {
         r_middle = (type == RIGHT) ? Vector3d(0.25, -0.1, -0.1) : Vector3d(0.25, 0.1, -0.1);
-        r_target = (type == RIGHT) ? Vector3d(0.45, 0.05, 0.0) : Vector3d(0.45, -0.05, 0.05); // fix left hand
+        r_target = (type == RIGHT) ? Vector3d(0.45, 0.05, 0.0) : Vector3d(0.45, -0.05, 0.0); // fix left hand
         double rot_angle = (type == RIGHT) ? 90 * M_PI / 180 : -90 * M_PI / 180;
         R_target = hand_func.rot(3, rot_angle, 3) * hand_func.rot(1, -65 * M_PI / 180, 3);
     } else if (scenario == "like") {
@@ -244,8 +246,8 @@ MatrixXd HandManager::scenario_target(HandType type, string scenario, int i, Vec
         r_target = (type == RIGHT) ? Vector3d(0.35, 0, -0.1) : Vector3d(0.25, -0.05, -0.2);
         R_target = (type == RIGHT) ? hand_func.rot(2, -130 * M_PI / 180, 3)*hand_func.rot(3, -90 * M_PI / 180, 3):hand_func.rot(2, -130 * M_PI / 180, 3)*hand_func.rot(1, -70 * M_PI / 180, 3) ;
     } else if (scenario == "home") {
-        r_middle = (type == RIGHT) ? Vector3d(0.3, -0.1, -0.25) : Vector3d(0.3, 0.1, -0.25);
-        r_target = (type == RIGHT) ? Vector3d(0.15, -0.07, -0.43) : Vector3d(0.15, 0.07, -0.43);
+        r_middle = (type == RIGHT) ? Vector3d(0.2, -0.07, -0.25) : Vector3d(0.2, 0.07, -0.25);
+        r_target = (type == RIGHT) ? Vector3d(0.02, -0.06, -0.46) : Vector3d(0.02, 0.06, -0.46);
         R_target = hand_func.rot(2, -20 * M_PI / 180, 3);
     }
 
@@ -595,7 +597,7 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
 
             Eigen::Vector3d head_angles(0,0,0);
             head_follow_hand(RIGHT, q_send);
-            //// Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
+            // Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
 
             sendHandMotorCommands(q_send, q_left_send, head_angles);
             publish_trigger_pub_.publish(std_msgs::Empty());
@@ -1062,13 +1064,13 @@ void HandManager::head_keyboard_callback(const std_msgs::Int32::ConstPtr& msg)
         return;
     }
 
-    const double HEAD_ANGLE_INCREMENT_DEGREES = 5.0;
+    const double HEAD_ANGLE_INCREMENT_DEGREES = 10.0;
     const double HEAD_ANGLE_INCREMENT_RAD = HEAD_ANGLE_INCREMENT_DEGREES * M_PI / 180.0; 
 
-    static const double YAW_MIN_RAD   = -60.0 * M_PI / 180.0;
-    static const double YAW_MAX_RAD   =  60.0 * M_PI / 180.0;
-    static const double PITCH_MIN_RAD = -28.0 * M_PI / 180.0;
-    static const double PITCH_MAX_RAD =  28.0 * M_PI / 180.0;
+    static const double YAW_MIN_RAD   = -80.0 * M_PI / 180.0;
+    static const double YAW_MAX_RAD   =  80.0 * M_PI / 180.0;
+    static const double PITCH_MIN_RAD = -35.0 * M_PI / 180.0;
+    static const double PITCH_MAX_RAD =  35.0 * M_PI / 180.0;
 
     auto clamp = [](double v, double lo, double hi){ return std::max(lo,std::min(hi,v)); };
 
@@ -1594,7 +1596,7 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
     const double ROLL_OPEN_ANGLE = 10.0 * M_PI / 180;
 
     // Joint offsets for homing at desired angles in radians
-    const double RIGHT_PITCH_OFFSET = 22.0 * M_PI / 180;
+    const double RIGHT_PITCH_OFFSET = 26.0 * M_PI / 180;
     const double RIGHT_ROLL_OFFSET = 7.0 * M_PI / 180;
     const double RIGHT_YAW_OFFSET = 93.0 * M_PI / 180;
     const double RIGHT_ELBOW_OFFSET = 14.0 * M_PI / 180;

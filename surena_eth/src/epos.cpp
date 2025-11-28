@@ -585,181 +585,76 @@ inline QByteArray Epos::CreateServoHeadCommand(QList<int> motorPositions)
     return command;
 }
 //========================================================================
+inline QByteArray Epos::Createwrist_command_packet(QList<int> motorPositions, int32_t id,int offset)
+{
+    QByteArray command;
+    command.append(id & 0xff);
+    command.append((id>>8)&0xff);
+
+    // ID: 6 for set servo position
+    command.append(6);
+
+    command.append(motorPositions[offset]);
+    command.append(motorPositions[offset+1]);
+    command.append(motorPositions[offset+2]);
+    command.append(motorPositions[offset+3]);
+    command.append(motorPositions[offset+4]);
+    command.append(motorPositions[offset+5]);
+
+    command.append(1);
+    return command;
+}
+//========================================================================
+inline QByteArray  Epos::Createpalm_command_packet(QList<int> motorPositions, int32_t id, int cmd_id, bool right_hand)
+{
+    // Finger Motor Data Structure: 29 + (0-5: positions right, 6-11: positions left, 12-13: triggers)
+
+    QByteArray command;
+    command.append(id & 0xff);
+    command.append((id>>8)&0xff);
+
+    // ID: 10 for position data
+    // ID: 11 for pressure data
+    // ID: 12 for PID data
+    command.append(cmd_id); 
+
+    if(right_hand) {
+        offset = 0;
+    } else {
+        offset = 6;
+    }
+
+    command.append(motorPositions[offset+29]);
+    command.append(motorPositions[offset+1+29]); 
+    command.append(motorPositions[offset+2+29]);
+    command.append(motorPositions[offset+3+29]); 
+    command.append(motorPositions[offset+4+29]); 
+    command.append(motorPositions[offset+5+29]);
+
+    if(right_hand) {
+        command.append(motorPositions[12+29]);  // Right hand trigger
+    } else {
+        command.append(motorPositions[13+29]);  // Left hand trigger
+    }
+
+    return command;
+}
+//========================================================================
 inline QByteArray Epos::CreatePalmCommand(QList<int> motorPositions)
 {
     QByteArray command;
 
-    static int palmID = 0;
-    static int subPalmID0 = 0;
-    static int subPalmID1 = 0;
-    static int subPalmID2 = 0;
-
-    // Finger Motor Data Structure: 29 + (0-5: positions, 6-11: pressure, 12-14: PID, 15-16: triggers)
-   
-    // QLOG_TRACE() << motorPositions[0] << " " << motorPositions[1] << " " << motorPositions[2] << " " << motorPositions[3] << " " << motorPositions[4] << " " << motorPositions[5];
-    // QLOG_TRACE() << motorPositions[6] << " " << motorPositions[7] << " " << motorPositions[8] << " " << motorPositions[9] << " " << motorPositions[10] << " " << motorPositions[11];
-    // QLOG_TRACE() << motorPositions[12] << " " << motorPositions[13] << " " << motorPositions[14] << " " << motorPositions[15];
-    // QLOG_TRACE() << motorPositions[16] << " " << motorPositions[17] << " " << motorPositions[18] << " " << motorPositions[19];
-    // QLOG_TRACE() << motorPositions[20] << " " << motorPositions[21] << " " << motorPositions[22];
-    // QLOG_TRACE() << motorPositions[23] << " " << motorPositions[24] << " " << motorPositions[25];
-    // QLOG_TRACE() << motorPositions[26] << " " << motorPositions[27] << " " << motorPositions[28];
-    // QLOG_TRACE() << motorPositions[29+0] << " " << motorPositions[29+1] << " " << motorPositions[29+2] << " " << motorPositions[29+3] << " " << motorPositions[29+4] << " " << motorPositions[29+5];
-    // QLOG_TRACE() << motorPositions[29+6] << " " << motorPositions[29+7] << " " << motorPositions[29+8] << " " << motorPositions[29+9] << " " << motorPositions[29+10] << " " << motorPositions[29+11];
-    // QLOG_TRACE() << motorPositions[29+12] << " " << motorPositions[29+13] << " " << motorPositions[29+14];
-    // QLOG_TRACE() << motorPositions[29+15] << " " << motorPositions[29+16];
-
-
-
-    // QLOG_TRACE() << "palmID: " << palmID << " subPalmID0: " << subPalmID0 << " subPalmID1: " << subPalmID1 << " subPalmID2: " << subPalmID2;
-    
-    if(palmID == 0) // wrist motors
-    {
-        if(subPalmID0 == 0)
-        {
-            command.append(0x02);
-            command.append(0x81);
-
-            command.append(6); // ID: 6 for set servo position
-
-            command.append(motorPositions[23]);
-            command.append(motorPositions[24]);
-            command.append(motorPositions[25]);
-            command.append((char)0);
-            command.append((char)0);
-            command.append((char)0);
-
-            command.append(1);
-            subPalmID0++;
-        }
-        else if(subPalmID0 == 1)
-        {
-            command.append(0x02);
-            command.append(0x82);
-
-            command.append(6); // ID: 6 for set servo position
-
-            command.append(motorPositions[26]);
-            command.append(motorPositions[27]);
-            command.append(motorPositions[28]);
-            command.append((char)0);
-            command.append((char)0);
-            command.append((char)0);
-
-            command.append(1);
-            subPalmID0 = 0;
-        }
-        palmID++;
+    if (motorPositions[12+29] != 0) {
+        command = Createpalm_command_packet(motorPositions, 0x281, 10, true);  // right
+        return command;
     }
-    else if(palmID == 1) // right hand
-    {
-        if(subPalmID1 == 0)
-        {
-            command.append(0x02);
-            command.append(0x81);
 
-            command.append(11); // ID: 11 for pressure data
-
-            command.append(motorPositions[6+29]);  // INDEX_FINGER speed
-            command.append(motorPositions[7+29]);  // MIDDLE_FINGER speed
-            command.append(motorPositions[8+29]);  // RING_FINGER speed
-            command.append(motorPositions[9+29]);  // LITTLE_FINGER speed
-            command.append(motorPositions[10+29]); // THUMB_FINGER speed
-            command.append(motorPositions[11+29]); // THUMB2_FINGER speed
-
-            command.append(motorPositions[15+29]);  // Right hand trigger
-            subPalmID1++;
-        }
-        else if(subPalmID1 == 1)
-        {
-            command.append(0x02);
-            command.append(0x81);
-
-            command.append(12); // ID: 12 for PID data
-
-            command.append(motorPositions[12+29]); // PID parameter 1
-            command.append(motorPositions[13+29]); // PID parameter 2
-            command.append(motorPositions[14+29]); // PID parameter 3
-            command.append((char)0); // Zero padding
-            command.append((char)0); // Zero padding
-            command.append((char)0); // Zero padding
-
-            command.append(motorPositions[15+29]);  // Right hand trigger
-            subPalmID1++;
-        }
-        else if(subPalmID1 == 2)
-        {
-            command.append(0x02);
-            command.append(0x81);
-
-            command.append(10); // ID: 10 for position data
-
-            command.append(motorPositions[0+29]); // INDEX_FINGER position
-            command.append(motorPositions[1+29]); // MIDDLE_FINGER position
-            command.append(motorPositions[2+29]); // RING_FINGER position
-            command.append(motorPositions[3+29]); // LITTLE_FINGER position
-            command.append(motorPositions[4+29]); // THUMB_FINGER position
-            command.append(motorPositions[5+29]); // THUMB2_FINGER position
-
-            command.append(motorPositions[15+29]);  // Right hand trigger
-            subPalmID1 = 0;
-        }
-        palmID++;
+    if (motorPositions[13+29] != 0) {
+        command = Createpalm_command_packet(motorPositions, 0x282, 10, false); // left
+        return command;
     }
-    else if(palmID == 2) // left hand
-    {
-        if(subPalmID2 == 0)
-        {
-            command.append(0x02);
-            command.append(0x82);
 
-            command.append(11); // ID: 11 for pressure data
-
-            command.append(motorPositions[6+29]);  // INDEX_FINGER speed
-            command.append(motorPositions[7+29]);  // MIDDLE_FINGER speed
-            command.append(motorPositions[8+29]);  // RING_FINGER speed
-            command.append(motorPositions[9+29]);  // LITTLE_FINGER speed
-            command.append(motorPositions[10+29]); // THUMB_FINGER speed
-            command.append(motorPositions[11+29]); // THUMB2_FINGER speed
-
-            command.append(motorPositions[16+29]);  // Left hand trigger
-            subPalmID2++;
-        }
-        else if(subPalmID2 == 1)
-        {
-            command.append(0x02);
-            command.append(0x82);
-
-            command.append(12); // ID: 12 for PID data
-
-            command.append(motorPositions[12+29]); // PID parameter 1
-            command.append(motorPositions[13+29]); // PID parameter 2
-            command.append(motorPositions[14+29]); // PID parameter 3
-            command.append((char)0); // Zero padding
-            command.append((char)0); // Zero padding
-            command.append((char)0); // Zero padding
-
-            command.append(motorPositions[16+29]);  // Left hand trigger
-            subPalmID2++;
-        }
-        else if(subPalmID2 == 2)
-        {
-            command.append(0x02);
-            command.append(0x82);
-
-            command.append(10); // ID: 10 for position data
-
-            command.append(motorPositions[0+29]); // INDEX_FINGER position
-            command.append(motorPositions[1+29]); // MIDDLE_FINGER position
-            command.append(motorPositions[2+29]); // RING_FINGER position
-            command.append(motorPositions[3+29]); // LITTLE_FINGER position
-            command.append(motorPositions[4+29]); // THUMB_FINGER position
-            command.append(motorPositions[5+29]); // THUMB2_FINGER position
-
-            command.append(motorPositions[16+29]);  // Left hand trigger
-            subPalmID2 = 0;
-        }
-        palmID = 0;
-    }
+    command = Createwrist_command_packet(motorPositions, 0x283, 23);
 
     return command;
 }
