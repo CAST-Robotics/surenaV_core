@@ -1,0 +1,8 @@
+string[] right_commands
+string[] left_commands
+bool right_enable
+bool left_enable
+bool go_home_on_finish
+---
+bool ok
+string message

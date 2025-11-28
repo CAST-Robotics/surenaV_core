@@ -18,6 +18,8 @@
 #include "json.hpp"
 #include <deque>
 #include <mutex>
+#include <thread>
+#include <atomic>
 
 // msgs & srvs
 #include <std_srvs/Empty.h>
@@ -36,6 +38,7 @@
 #include "hand_planner/KeyboardJog.h"
 #include "hand_planner/headkeyboardjog.h"
 #include "hand_planner/MoveHandGeneral.h"
+#include "hand_planner/MoveHandsGeneral.h"
 #include "hand_planner/FingerControl.h"
 #include "hand_planner/FingerScenario.h"
 #include "hand_planner/arm_back_to_home.h"
@@ -72,6 +75,7 @@ private:
     ros::ServiceServer move_head_keyboard_service_;
     ros::ServiceServer move_hand_general_service_;
     ros::ServiceServer move_hand_general_left_service_;
+    ros::ServiceServer move_hands_general_srv_;
     ros::ServiceServer finger_control_service_;
     ros::ServiceServer finger_scenario_service_;
     ros::ServiceServer arm_back_to_home_service_;
@@ -145,6 +149,7 @@ private:
     double micArray_theta;
     int target_class_id_ = 41;
     std::mutex target_mutex_;
+    std::mutex hands_mutex_;
     std::deque<double> micArray_data_buffer;
 
     void object_detect_callback(const hand_planner::DetectionInfoArray &msg);
@@ -172,6 +177,7 @@ private:
     bool move_head_keyboard_handler(hand_planner::headkeyboardjog::Request &req, hand_planner::headkeyboardjog::Response &res);
     bool move_hand_general_handler(hand_planner::MoveHandGeneral::Request &req, hand_planner::MoveHandGeneral::Response &res);
     bool move_hand_general_left_handler(hand_planner::MoveHandGeneral::Request &req, hand_planner::MoveHandGeneral::Response &res);
+    bool move_hands_general_handler(hand_planner::MoveHandsGeneral::Request &req, hand_planner::MoveHandsGeneral::Response &res);
     bool arm_home_service_handler(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
     
     // Finger control services

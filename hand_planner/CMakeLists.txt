@@ -70,6 +70,7 @@ add_service_files(
   KeyboardJog.srv
   headkeyboardjog.srv
   MoveHandGeneral.srv
+  MoveHandsGeneral.srv
   FingerControl.srv
   FingerScenario.srv
   arm_back_to_home.srv
