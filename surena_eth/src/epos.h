@@ -177,8 +177,8 @@ class Epos : public QObject
     QByteArray CreateBumpRequestCommand();
     QByteArray CreateServoHeadCommand(QList<int> motorPositions);
     QByteArray CreatePalmCommand(QList<int> motorPositions);
-    QByteArray Createwrist_command_packet(QList<int> motorPositions, int32_t id,int offset);
-    QByteArray Createpalm_command_packet(QList<int> motorPositions, int32_t id, int cmd_id, bool right_hand);
+    QByteArray Createwrist_command_packet(QList<int> motorPositions, uint32_t id,int offset);
+    QByteArray Createpalm_command_packet(QList<int> motorPositions, uint32_t id, int cmd_id, bool right_hand);
 
     bool IsValidRunPacket(QByteArray packet);
     void GetFTSensorDataFromPacket(EthernetReceivedPacketType *packet);

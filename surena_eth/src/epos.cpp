@@ -585,7 +585,7 @@ inline QByteArray Epos::CreateServoHeadCommand(QList<int> motorPositions)
     return command;
 }
 //========================================================================
-inline QByteArray Epos::Createwrist_command_packet(QList<int> motorPositions, int32_t id,int offset)
+inline QByteArray Epos::Createwrist_command_packet(QList<int> motorPositions, uint32_t id,int offset)
 {
     QByteArray command;
     command.append(id & 0xff);
@@ -605,7 +605,7 @@ inline QByteArray Epos::Createwrist_command_packet(QList<int> motorPositions, in
     return command;
 }
 //========================================================================
-inline QByteArray  Epos::Createpalm_command_packet(QList<int> motorPositions, int32_t id, int cmd_id, bool right_hand)
+inline QByteArray  Epos::Createpalm_command_packet(QList<int> motorPositions, uint32_t id, int cmd_id, bool right_hand)
 {
     // Finger Motor Data Structure: 29 + (0-5: target positions, 6-7: controls)
 
@@ -637,6 +637,7 @@ inline QByteArray  Epos::Createpalm_command_packet(QList<int> motorPositions, in
 inline QByteArray Epos::CreatePalmCommand(QList<int> motorPositions)
 {
     QByteArray command;
+    // QLOG_TRACE()<<motorPositions[6+29]<<" "<<motorPositions[7+29];
 
     if (motorPositions[6+29] != 0) {
         command = Createpalm_command_packet(motorPositions, 0x281, 10, true);  // right
