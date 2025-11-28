@@ -1,10 +1,7 @@
 # Request
 int64[] target_positions
-int64[] pressure_limits
-int64 pid_kp
-int64 pid_ki
-int64 pid_kd
-string hand_selection  # "right", "left", "both" (default="right")
+int64 control_data
+string hand_selection  # "right", "left" (default="right")
 ---
 # Response
 bool success

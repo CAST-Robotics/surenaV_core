@@ -1835,19 +1835,14 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
 }
 
 bool HandManager::fingerControlService(hand_planner::FingerControl::Request &req, hand_planner::FingerControl::Response &res) {
-    ROS_INFO("Received direct finger control request with hand selection: %s", req.hand_selection.c_str());
-    
     try {
         // Convert hand selection to enum (default to RIGHT_HAND if not specified)
         HandSelection hand = (req.hand_selection.empty()) ? HandSelection::RIGHT_HAND : finger_control_->stringToHandSelection(req.hand_selection);
-        
-        // Convert request data to vectors
-        std::vector<uint8_t> positions(req.target_positions.begin(), req.target_positions.end());
-        std::vector<uint8_t> limits(req.pressure_limits.begin(), req.pressure_limits.end());
-        global_finger_trigger = 1;
-        
-        bool success = finger_control_->setDirectControl(positions, limits, req.pid_kp, req.pid_ki, req.pid_kd, hand);
-        
+        std::vector<uint8_t> target_positions(req.target_positions.begin(), req.target_positions.end());
+        uint8_t control_data = req.control_data;
+
+        bool success = finger_control_->setDirectControl(target_positions, control_data, hand);
+
         if (success) {
             res.success = true;
             res.message = "Direct finger control parameters set successfully";
@@ -1860,17 +1855,13 @@ bool HandManager::fingerControlService(hand_planner::FingerControl::Request &req
         res.success = false;
         res.message = "Exception in direct finger control: " + std::string(e.what());
     }
-    global_finger_trigger = 0;
     return true;
 }
 
-bool HandManager::fingerScenarioService(hand_planner::FingerScenario::Request &req, hand_planner::FingerScenario::Response &res) {
-    ROS_INFO("Received finger scenario request for scenario: %s with hand selection: %s", req.scenario_name.c_str(), req.hand_selection.c_str());
-    
+bool HandManager::fingerScenarioService(hand_planner::FingerScenario::Request &req, hand_planner::FingerScenario::Response &res) {  
     try {
         // Convert hand selection to enum (default to RIGHT_HAND if not specified)
-        HandSelection hand = (req.hand_selection.empty()) ? HandSelection::RIGHT_HAND : finger_control_->stringToHandSelection(req.hand_selection);
-        global_finger_trigger = 1;
+        HandSelection hand = (req.hand_selection.empty()) ? HandSelection::RIGHT_HAND : finger_control_->stringToHandSelection(req.hand_selection);        
         
         if (finger_control_->executeScenario(req.scenario_name, hand)) {
             res.success = true;
@@ -1884,7 +1875,6 @@ bool HandManager::fingerScenarioService(hand_planner::FingerScenario::Request &r
         res.success = false;
         res.message = "Exception in finger scenario: " + std::string(e.what());
     }
-    global_finger_trigger = 0;
     return true;
 }
 

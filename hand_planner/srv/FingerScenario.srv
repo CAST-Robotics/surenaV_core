@@ -1,6 +1,6 @@
 # Request
 string scenario_name
-string hand_selection  # "right", "left", "both" (default="right")
+string hand_selection  # "right", "left" (default="right")
 ---
 # Response
 bool success

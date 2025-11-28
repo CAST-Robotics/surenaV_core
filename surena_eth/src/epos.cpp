@@ -607,7 +607,7 @@ inline QByteArray Epos::Createwrist_command_packet(QList<int> motorPositions, in
 //========================================================================
 inline QByteArray  Epos::Createpalm_command_packet(QList<int> motorPositions, int32_t id, int cmd_id, bool right_hand)
 {
-    // Finger Motor Data Structure: 29 + (0-5: positions right, 6-11: positions left, 12-13: triggers)
+    // Finger Motor Data Structure: 29 + (0-5: target positions, 6-7: controls)
 
     QByteArray command;
     command.append(id & 0xff);
@@ -616,25 +616,19 @@ inline QByteArray  Epos::Createpalm_command_packet(QList<int> motorPositions, in
     // ID: 10 for position data
     // ID: 11 for pressure data
     // ID: 12 for PID data
-    command.append(cmd_id); 
+    command.append(cmd_id);
+
+    command.append(motorPositions[0+29]);
+    command.append(motorPositions[1+29]); 
+    command.append(motorPositions[2+29]);
+    command.append(motorPositions[3+29]); 
+    command.append(motorPositions[4+29]); 
+    command.append(motorPositions[5+29]);
 
     if(right_hand) {
-        offset = 0;
+        command.append(motorPositions[6+29]);  // Right hand control
     } else {
-        offset = 6;
-    }
-
-    command.append(motorPositions[offset+29]);
-    command.append(motorPositions[offset+1+29]); 
-    command.append(motorPositions[offset+2+29]);
-    command.append(motorPositions[offset+3+29]); 
-    command.append(motorPositions[offset+4+29]); 
-    command.append(motorPositions[offset+5+29]);
-
-    if(right_hand) {
-        command.append(motorPositions[12+29]);  // Right hand trigger
-    } else {
-        command.append(motorPositions[13+29]);  // Left hand trigger
+        command.append(motorPositions[7+29]);  // Left hand control
     }
 
     return command;
@@ -644,12 +638,12 @@ inline QByteArray Epos::CreatePalmCommand(QList<int> motorPositions)
 {
     QByteArray command;
 
-    if (motorPositions[12+29] != 0) {
+    if (motorPositions[6+29] != 0) {
         command = Createpalm_command_packet(motorPositions, 0x281, 10, true);  // right
         return command;
     }
 
-    if (motorPositions[13+29] != 0) {
+    if (motorPositions[7+29] != 0) {
         command = Createpalm_command_packet(motorPositions, 0x282, 10, false); // left
         return command;
     }

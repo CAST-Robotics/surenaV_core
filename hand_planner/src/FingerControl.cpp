@@ -1,7 +1,6 @@
 #include "FingerControl.h"
 
-uint8_t global_finger_trigger = 0;
-// Finger message with 17 elements: 6 positions + 6 pressure + 3 PID + 1 right trigger + 1 left trigger  
+// Finger Motor Data Structure: 29 + (0-5: target positions, 6-7: controls)
 
 FingerControl::FingerControl(ros::NodeHandle* nh) : nh_(nh) {
     // Initialize ROS communication
@@ -16,121 +15,76 @@ FingerControl::FingerControl(ros::NodeHandle* nh) : nh_(nh) {
         FingerScenario scenario;
         scenario.name = name;
         scenario.target_positions = scenario_data["target_positions"].get<std::vector<uint8_t>>();
-        scenario.pressure_limits = scenario_data["pressure_limits"].get<std::vector<uint8_t>>();
-        scenario.pid_kp = scenario_data["pid_kp"].get<uint8_t>();
-        scenario.pid_ki = scenario_data["pid_ki"].get<uint8_t>();
-        scenario.pid_kd = scenario_data["pid_kd"].get<uint8_t>();
-        
+        scenario.control_data = scenario_data["control_data"].get<uint8_t>();
         scenarios_[name] = scenario;
     }
-    ROS_INFO("Finger Control initialized");
 }
 
 bool FingerControl::executeScenario(const std::string& name, HandSelection hand) {
     std::lock_guard<std::mutex> lock(scenarios_mutex_);
-    
     auto it = scenarios_.find(name);
     if (it == scenarios_.end()) {
         ROS_ERROR("Scenario '%s' not found", name.c_str());
         return false;
     }
-    
     const FingerScenario& scenario = it->second;
-    std::string hand_str = (hand == HandSelection::RIGHT_HAND) ? "right" : (hand == HandSelection::LEFT_HAND) ? "left" : "both";
-    ROS_INFO("Executing scenario: %s for %s hand(s)", scenario.name.c_str(), hand_str.c_str());
-    for (int i = 0; i < 17; ++i) {
+    for (int i = 0; i < 8; ++i) {
         finger_commands_[i] = 0;
     }
-    
-    // Fill positions (indices 0-5)
+    // Fill positions (0-5)
     for (int i = 0; i < 6; ++i) {
         finger_commands_[i] = scenario.target_positions[i];
     }
-    
-    // Fill pressure limits (indices 6-11)
-    for (int i = 0; i < 6; ++i) {
-        finger_commands_[i + 6] = scenario.pressure_limits[i];
+    // Set controls based on hand selection
+    if (hand == HandSelection::RIGHT_HAND) {
+        finger_commands_[6] = scenario.control_data;  // Right hand control
     }
-    
-    // Fill PID values (indices 12-14)
-    finger_commands_[12] = scenario.pid_kp;
-    finger_commands_[13] = scenario.pid_ki;
-    finger_commands_[14] = scenario.pid_kd;
-    
-    // Set triggers based on hand selection (indices 15-16)
-    if (hand == HandSelection::RIGHT_HAND || hand == HandSelection::BOTH_HANDS) {
-        finger_commands_[15] = global_finger_trigger;  // Right hand trigger
+    if (hand == HandSelection::LEFT_HAND) {
+        finger_commands_[7] = scenario.control_data;  // Left hand control
     }
-    if (hand == HandSelection::LEFT_HAND || hand == HandSelection::BOTH_HANDS) {
-        finger_commands_[16] = global_finger_trigger;  // Left hand trigger
-    }
-    
-    // Publish message for 1 seconds
+    // Publish 2 messages
     ros::Rate rate(200);
-    ros::Time start_time = ros::Time::now();
-    while (ros::ok() && (ros::Time::now() - start_time).toSec() < 1.0) {
+    for (int i=0; i<2; i++) {
         publish_trigger_pub_.publish(std_msgs::Empty());
         rate.sleep();
+        for (int i = 0; i < 8; ++i) {
+            finger_commands_[i] = 0;
+        }
     }
-    
-    ROS_INFO("Scenario '%s' executed successfully for %s hand(s)", scenario.name.c_str(), hand_str.c_str());
     return true;
 }
 
-bool FingerControl::setDirectControl(const std::vector<uint8_t>& positions,
-                                    const std::vector<uint8_t>& limits,
-                                    uint8_t kp, uint8_t ki, uint8_t kd,
-                                    HandSelection hand) {
-    ROS_INFO("Setting direct finger control parameters");
-    
+bool FingerControl::setDirectControl(const std::vector<uint8_t>& target_positions,
+                                    uint8_t control_data,
+                                    HandSelection hand) {  
     // Validate input sizes
-    if (positions.size() != 6) {
-        ROS_ERROR("Invalid positions size: %zu (expected: 6)", positions.size());
+    if (target_positions.size() != 6) {
+        ROS_ERROR("Invalid target positions size: %zu (expected: 6)", target_positions.size());
         return false;
-    }
-    if (limits.size() != 6) {
-        ROS_ERROR("Invalid pressure limits size: %zu (expected: 6)", limits.size());
-        return false;
-    }
-    
-    std::string hand_str = (hand == HandSelection::RIGHT_HAND) ? "right" : (hand == HandSelection::LEFT_HAND) ? "left" : "both";
-    ROS_INFO("Executing direct control for %s hand(s)", hand_str.c_str());
-    for (int i = 0; i < 17; ++i) {
+    }    
+    for (int i = 0; i < 8; ++i) {
         finger_commands_[i] = 0;
     }
-    
-    // Fill positions (indices 0-5)
+    // Fill target positions (0-5)
     for (int i = 0; i < 6; ++i) {
-        finger_commands_[i] = positions[i];
+        finger_commands_[i] = target_positions[i];
     }
-    
-    // Fill pressure limits (indices 6-11)
-    for (int i = 0; i < 6; ++i) {
-        finger_commands_[i + 6] = limits[i];
+    // Set controls based on hand selection
+    if (hand == HandSelection::RIGHT_HAND) {
+        finger_commands_[6] = control_data;  // Right hand control
     }
-    
-    // Fill PID values (indices 12-14)
-    finger_commands_[12] = kp;
-    finger_commands_[13] = ki;
-    finger_commands_[14] = kd;
-    
-    // Set triggers based on hand selection (indices 15-16)
-    if (hand == HandSelection::RIGHT_HAND || hand == HandSelection::BOTH_HANDS) {
-        finger_commands_[15] = global_finger_trigger;  // Right hand trigger
+    if (hand == HandSelection::LEFT_HAND) {
+        finger_commands_[7] = control_data;  // Left hand control
     }
-    if (hand == HandSelection::LEFT_HAND || hand == HandSelection::BOTH_HANDS) {
-        finger_commands_[16] = global_finger_trigger;  // Left hand trigger
-    }
-
-    // Publish message for 1 seconds
+    // Publish 2 messages
     ros::Rate rate(200);
-    ros::Time start_time = ros::Time::now();
-    while (ros::ok() && (ros::Time::now() - start_time).toSec() < 1.0) {
+    for (int i=0; i<2; i++) {
         publish_trigger_pub_.publish(std_msgs::Empty());
         rate.sleep();
+        for (int i = 0; i < 8; ++i) {
+            finger_commands_[i] = 0;
+        }
     }
-    
-    ROS_INFO("Direct finger control executed successfully for %s hand(s)", hand_str.c_str());
     return true;
 }
 
@@ -143,8 +97,6 @@ HandSelection FingerControl::stringToHandSelection(const std::string& hand_str) 
         return HandSelection::RIGHT_HAND;
     } else if (lower_hand == "left") {
         return HandSelection::LEFT_HAND;
-    } else if (lower_hand == "both") {
-        return HandSelection::BOTH_HANDS;
     } else {
         ROS_WARN("Invalid hand selection: '%s', defaulting to RIGHT_HAND", hand_str.c_str());
         return HandSelection::RIGHT_HAND;  // Default to right hand

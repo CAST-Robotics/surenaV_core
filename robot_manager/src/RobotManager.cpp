@@ -172,10 +172,7 @@ bool RobotManager::execute_step(const YAML::Node& step) {
         ros::ServiceClient client = nh_->serviceClient<hand_planner::FingerControl>(service_name);
         hand_planner::FingerControl srv;
         srv.request.target_positions = params["target_positions"].as<std::vector<int64_t>>();
-        srv.request.pressure_limits = params["pressure_limits"].as<std::vector<int64_t>>();
-        srv.request.pid_kp = params["pid_kp"].as<int64_t>();
-        srv.request.pid_ki = params["pid_ki"].as<int64_t>();
-        srv.request.pid_kd = params["pid_kd"].as<int64_t>();
+        srv.request.control_data = params["control_data"].as<int64_t>();
         srv.request.hand_selection = params["hand_selection"].as<std::string>();
         if (!client.call(srv)) { ROS_ERROR("Service call to %s failed.", service_name.c_str()); return false; }
         return srv.response.success;
