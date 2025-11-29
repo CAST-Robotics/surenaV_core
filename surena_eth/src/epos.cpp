@@ -588,8 +588,10 @@ inline QByteArray Epos::CreateServoHeadCommand(QList<int> motorPositions)
 inline QByteArray Epos::Createwrist_command_packet(QList<int> motorPositions, uint32_t id,int offset)
 {
     QByteArray command;
-    command.append(id & 0xff);
-    command.append((id>>8)&0xff);
+    // command.append(id & 0xff);
+    // command.append((id>>8)&0xff);
+    command.append(0x02);
+    command.append(0x83);
 
     // ID: 6 for set servo position
     command.append(6);
@@ -610,8 +612,13 @@ inline QByteArray  Epos::Createpalm_command_packet(QList<int> motorPositions, ui
     // Finger Motor Data Structure: 29 + (0-5: target positions, 6-7: controls)
 
     QByteArray command;
-    command.append(id & 0xff);
-    command.append((id>>8)&0xff);
+    if(right_hand) {
+        command.append(0x02);
+        command.append(0x81);
+    } else {
+        command.append(0x02);
+        command.append(0x82);
+    }
 
     // ID: 10 for position data
     // ID: 11 for pressure data
