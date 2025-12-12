@@ -1,6 +1,7 @@
 #include "FingerControl.h"
 
 // Finger Motor Data Structure: 29 + (0-5: target positions, 6-7: controls)
+// 0: close , 255: open
 
 FingerControl::FingerControl(ros::NodeHandle* nh) : nh_(nh) {
     // Initialize ROS communication

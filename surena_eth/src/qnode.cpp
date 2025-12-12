@@ -97,6 +97,7 @@ bool QNode::Init() {
     _activeCSPService = n.advertiseService("ActivateWholeBody", &QNode::ActiveCSP, this);
     _activateHandsService = n.advertiseService("ActivateHands", &QNode::ActivateHands, this);
     _activateLegsService = n.advertiseService("ActivateLegs", &QNode::ActivateLegs, this);
+    _getFingerPressuresService = n.advertiseService("GetFingerPressures", &QNode::FingerPressures, this);
 
 
     _updatePositions = n.advertiseService("UpdatePositions", &QNode::UpdatePositions, this);
@@ -308,6 +309,12 @@ bool QNode::ActivateLegs(robot_teleop::node::Request &req, robot_teleop::node::R
     res.result=-1;
         return false;
 }
+    return true;
+}
+//================================================================================================================================================================
+bool QNode::FingerPressures(robot_teleop::node::Request &req, robot_teleop::node::Response &res)
+{
+    Q_EMIT DoGetFingerPressures(req.nodeID);
     return true;
 }
 //================================================================================================================================================================

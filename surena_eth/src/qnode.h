@@ -84,6 +84,7 @@ private:
     ros::ServiceServer _activateHandsService;
     ros::ServiceServer _activateLegsService;
     ros::ServiceServer _getRobotStatus;
+    ros::ServiceServer _getFingerPressuresService;
 
 
 public:
@@ -144,6 +145,8 @@ public:
     bool ResetHands(robot_teleop::node::Request &req, robot_teleop::node::Response &res);
     bool ActivateHands(robot_teleop::node::Request &req, robot_teleop::node::Response &res);
 
+    bool FingerPressures(robot_teleop::node::Request &req, robot_teleop::node::Response &res);
+
     bool ResetLegs(robot_teleop::node::Request &req, robot_teleop::node::Response &res);
 Q_SIGNALS:
     //=================================================================================================
@@ -156,6 +159,8 @@ Q_SIGNALS:
     void SetActiveCSP(int id);
     //=================================================================================================
     void DoResetAllNodes(int id);
+    //=================================================================================================
+    void DoGetFingerPressures(int id);
     //=================================================================================================
     void DoResetHands(void);
     //=================================================================================================

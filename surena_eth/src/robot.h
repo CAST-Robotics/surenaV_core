@@ -104,6 +104,7 @@ public slots:
     void ActivateHands();
     void ActivateLegs();
     void ResetLegs();
+    void GetFingerPressures(int id);
 };
 
 #endif // ROBOT_H

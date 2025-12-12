@@ -23,6 +23,8 @@ Robot::Robot(QObject *parent, int argc, char **argv)
     connect(_rosNode,SIGNAL(DoResetAllNodes(int)),this,SLOT(ResetAllNodes(int)));
     connect(_rosNode,SIGNAL(DoResetLegs()),this,SLOT(ResetLegs()));
 
+    connect(_rosNode,SIGNAL(DoGetFingerPressures(int)),this,SLOT(GetFingerPressures(int)));
+
     connect(_rosNode,SIGNAL(DoResetHands()),this,SLOT(ResetHands()));
     connect(_rosNode,SIGNAL(UpdateAllPositions()),this,SLOT(ReadAllInitialPositions()));
     connect(_rosNode,SIGNAL(DoActivateHands()),this,SLOT(ActivateHands()));
@@ -270,7 +272,34 @@ void Robot::ActivateLegs(void)
 
 
 }
+void Robot::GetFingerPressures(int id)
+{
+    qDebug()<<"Getting Pressures...";
+    for(int i=0; i<10; i++)
+    {
+        QByteArray data;
+    
+        // ID: 5 for getting pressure values
+        data.append(5);
+        data.append(i%5);
+        data.append(0x01);
+        data.append(0x01);
+        data.append(0x01);
+        data.append(0x01);
+        data.append(0x01);
+        data.append(0x01);
 
+        Epos4.can.WriteMessage(0x281 + (i/5),14,data);
+        QByteArray reply = Epos4.can.ReadMessage(14);
+        QByteArray data_part = reply.mid(2, 4);
+
+        float sensor_value = 0;
+        memcpy(&sensor_value, data_part.constData(), sizeof(float));
+
+        qDebug() << sensor_value;
+    }
+    
+}
 //=================================================================================================
 void Robot::ResetAllNodes(int id)
 {
