@@ -3,7 +3,7 @@
 // --- CONSTRUCTOR ---
 RobotManager::RobotManager(ros::NodeHandle *n) : 
     nh_(n),
-    simulation(true)
+    simulation(false)
 {
     hand_manager_ = std::make_unique<HandManager>(nh_);
     gait_manager_ = std::make_unique<GaitManager>(nh_);
@@ -268,8 +268,7 @@ void RobotManager::publishCombinedMotorCommands() {
     if (!simulation)
     {
         combined_motor_command_msg_.data.clear();
-        combined_motor_command_msg_.data.reserve(12 + 8 + 3 + 6 + finger_motor_commands.size());
-
+        
         // -------------------------
         // 0–11 : Gait
         // -------------------------
@@ -298,7 +297,7 @@ void RobotManager::publishCombinedMotorCommands() {
         // -------------------------
         // Finger motors
         // -------------------------
-        for (int i = 0; i < 17; ++i) {
+        for (int i = 0; i < 8; ++i) {
             combined_motor_command_msg_.data.push_back(finger_motor_commands[i]);
         }
         // -------------------------
@@ -322,7 +321,6 @@ void RobotManager::publishCombinedMotorCommands() {
     else
     {
         combined_gazebo_command_msg_.data.clear();
-        combined_gazebo_command_msg_.data.reserve(12 + 8 + 3 + 6 + finger_motor_commands.size());
 
         // -------------------------
         // 0–11 : Gait (rad)
@@ -352,7 +350,7 @@ void RobotManager::publishCombinedMotorCommands() {
         // -------------------------
         // Finger commands
         // -------------------------
-        for (int i = 0; i < 17; ++i) {
+        for (int i = 0; i < 8; ++i) {
             combined_gazebo_command_msg_.data.push_back(finger_motor_commands[i]);
         }
         // -------------------------
