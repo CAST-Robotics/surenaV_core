@@ -963,7 +963,7 @@ void GaitManager::keyboardHandler(const std_msgs::Int32 &msg)
             isKeyboardTrajectoryEnabled = false;
             break;
 
-        case 104: // h: in place turn right
+        case 102: // f: in place turn right
             step_count = 4;  // 14 steps for 90 degrees rotation
             step_length = 0.02;
             theta = 0.10;
@@ -1011,7 +1011,7 @@ void GaitManager::keyboardHandler(const std_msgs::Int32 &msg)
             isKeyboardTrajectoryEnabled = false;
             break;
 
-        case 117: // u: comming up
+        case 121: // y: comming up
             init_com_pos[2] = COM_height;
             final_com_pos[2] = 0.71;
             robot->generalTrajGen(dt, 2, init_com_pos, final_com_pos, init_com_orient, final_com_orient,
@@ -1020,7 +1020,7 @@ void GaitManager::keyboardHandler(const std_msgs::Int32 &msg)
             isKeyboardTrajectoryEnabled = false;
             break;
 
-        case 106: // j: comming down
+        case 104: // h: comming down
             init_com_pos[2] = 0.71;
             final_com_pos[2] = COM_height;
             robot->generalTrajGen(dt, 2, init_com_pos, final_com_pos, init_com_orient, final_com_orient,

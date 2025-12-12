@@ -3,7 +3,7 @@
 // --- CONSTRUCTOR ---
 RobotManager::RobotManager(ros::NodeHandle *n) : 
     nh_(n),
-    simulation(false)
+    simulation(true)
 {
     hand_manager_ = std::make_unique<HandManager>(nh_);
     gait_manager_ = std::make_unique<GaitManager>(nh_);
@@ -258,69 +258,121 @@ void RobotManager::publishCombinedMotorCommands() {
     const std::vector<double>& hand_motor_commands = hand_manager_->getHandMotorCommands();
     const std::vector<double>& hand_gazebo_commands = hand_manager_->getHandGazeboCommands();
 
+    // Get commands from HeadManager (upper body and head)
+    const std::vector<double>& head_motor_commands = hand_manager_->getHeadMotorCommands();
+    const std::vector<double>& head_gazebo_commands = hand_manager_->getHeadGazeboCommands();
+
     // Get commands from FingerControl (hands)
     const std::vector<double>& finger_motor_commands = hand_manager_->getFingerMotorCommands();    
 
-    if (!simulation) { 
+    if (!simulation)
+    {
         combined_motor_command_msg_.data.clear();
+        combined_motor_command_msg_.data.reserve(12 + 8 + 3 + 6 + finger_motor_commands.size());
 
-        for (int i = 0; i < 12; ++i) {
+        // -------------------------
+        // 0–11 : Gait
+        // -------------------------
+        for (int i = 0; i < 12; i++)
             combined_motor_command_msg_.data.push_back(gait_motor_commands[i]);
-        }
-        for (int i = 12; i < 29; ++i) {
+
+        // -------------------------
+        // 12–19 : Hand motor (first part)
+        // -------------------------
+        for (int i = 12; i < 20; i++)
             combined_motor_command_msg_.data.push_back(hand_motor_commands[i]);
-        }
+
+        // -------------------------
+        // 20–22 : Head motor (NEW)
+        // -------------------------
+        combined_motor_command_msg_.data.push_back(head_motor_commands[0]);
+        combined_motor_command_msg_.data.push_back(head_motor_commands[1]);
+        combined_motor_command_msg_.data.push_back(head_motor_commands[2]);
+
+        // -------------------------
+        // 23–29 : Hand motor (remaining)
+        // -------------------------
+        for (int i = 23; i < 29; i++)
+            combined_motor_command_msg_.data.push_back(hand_motor_commands[i]);
+
+        // -------------------------
+        // Finger motors
+        // -------------------------
         for (int i = 0; i < 17; ++i) {
             combined_motor_command_msg_.data.push_back(finger_motor_commands[i]);
         }
-
-        if (gait_motor_commands[12] != 0) { // If GaitManager provides a value for Right Arm Shoulder Yaw
+        // -------------------------
+        // Override shoulders if gait contributes
+        // -------------------------
+        if (gait_motor_commands[12] != 0)  
             combined_motor_command_msg_.data[12] += gait_motor_commands[12];
-        }
-        if (gait_motor_commands[16] != 0) { // If GaitManager provides a value for Left Arm Shoulder Yaw
+
+        if (gait_motor_commands[16] != 0)
             combined_motor_command_msg_.data[16] += gait_motor_commands[16];
-        }
 
         combined_motor_pub_.publish(combined_motor_command_msg_);
+
 
         // for (size_t i = 0; i < combined_motor_command_msg_.data.size(); ++i) {
         //     std::cout << combined_motor_command_msg_.data[i];
         //     if (i < combined_motor_command_msg_.data.size() - 1) std::cout << ", ";
         // }
         // std::cout << std::endl;
-
-    } else { // Gazebo Simulation (radians)
+    }
+    else
+    {
         combined_gazebo_command_msg_.data.clear();
+        combined_gazebo_command_msg_.data.reserve(12 + 8 + 3 + 6 + finger_motor_commands.size());
 
-        // Copy lower body commands from GaitManager (0-11)
-        for (int i = 0; i < 12; ++i) {
+        // -------------------------
+        // 0–11 : Gait (rad)
+        // -------------------------
+        for (int i = 0; i < 12; i++)
             combined_gazebo_command_msg_.data.push_back(gait_gazebo_commands[i]);
-        }
-        // Copy upper body commands (including head and wrists) from HandManager (12-28)
 
-        for (int i = 12; i < 29; ++i) {
+        // -------------------------
+        // 12–19 : Hand gazebo (first part)
+        // -------------------------
+        for (int i = 12; i < 20; i++)
             combined_gazebo_command_msg_.data.push_back(hand_gazebo_commands[i]);
-        }
 
+        // -------------------------
+        // 20–22 : Head gazebo (rad)
+        // -------------------------
+        combined_gazebo_command_msg_.data.push_back(head_gazebo_commands[0]);
+        combined_gazebo_command_msg_.data.push_back(head_gazebo_commands[1]);
+        combined_gazebo_command_msg_.data.push_back(head_gazebo_commands[2]);
+
+        // -------------------------
+        // 23–29 : Hand gazebo (remaining)
+        // -------------------------
+        for (int i = 23; i < 29; i++)
+            combined_gazebo_command_msg_.data.push_back(hand_gazebo_commands[i]);
+
+        // -------------------------
+        // Finger commands
+        // -------------------------
         for (int i = 0; i < 17; ++i) {
             combined_gazebo_command_msg_.data.push_back(finger_motor_commands[i]);
         }
-
-        if (gait_gazebo_commands[12] != 0.0) {
+        // -------------------------
+        // Override shoulders if gait provides values
+        // -------------------------
+        if (gait_gazebo_commands[12] != 0.0)
             combined_gazebo_command_msg_.data[12] = gait_gazebo_commands[12];
-        }
-        if (gait_gazebo_commands[16] != 0.0) {
+
+        if (gait_gazebo_commands[16] != 0.0)
             combined_gazebo_command_msg_.data[16] = gait_gazebo_commands[16];
-        }
 
         combined_gazebo_pub_.publish(combined_gazebo_command_msg_);
-        
+
         // for (size_t i = 0; i < combined_gazebo_command_msg_.data.size(); ++i) {
         //     std::cout << combined_gazebo_command_msg_.data[i];
         //     if (i < combined_gazebo_command_msg_.data.size() - 1) std::cout << ", ";
         // }
         // std::cout << std::endl;
     }
+
 }
 
 

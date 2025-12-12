@@ -137,6 +137,16 @@ const std::vector<double>& HandManager::getHandGazeboCommands() const {
     return hand_gazebo_commands_;
 }
 
+const std::vector<double>& HandManager::getHeadMotorCommands() const {
+    std::lock_guard<std::mutex> lock(command_mutex_);
+    return head_motor_commands_;
+}
+
+const std::vector<double>& HandManager::getHeadGazeboCommands() const {
+    std::lock_guard<std::mutex> lock(command_mutex_);
+    return head_gazebo_commands_;
+}
+
 const std::vector<double>& HandManager::getFingerMotorCommands() const {
     std::lock_guard<std::mutex> lock(command_mutex_);
     return finger_control_-> getFingerCommands();
@@ -543,6 +553,34 @@ void HandManager::sendHandMotorCommands(const VectorXd& q_rad_right, const Vecto
     hand_gazebo_commands_ = q_gazebo_temp; // Store for RobotManager
 }
 
+
+void HandManager::sendHeadMotorCommands(const Vector3d& head_angles) {
+    
+    std::lock_guard<std::mutex> lock(command_mutex_); // Acquire lock
+    std::vector<double> q_motor_temp_head(3, 0); 
+    std::vector<double> q_gazebo_temp_head(3, 0.0);
+
+
+    // Head motors (indices 20-22) - roll, pitch, yaw
+    q_motor_temp_head[0] = int(roll_command_range[0] + (roll_command_range[1] - roll_command_range[0]) *
+                        ((-(head_angles(0)*180/M_PI) - roll_range[0]) / (roll_range[1] - roll_range[0])));
+    q_motor_temp_head[1] = int(pitch_command_range[0] + (pitch_command_range[1] - pitch_command_range[0]) *
+                        ((-(head_angles(1)*180/M_PI) - pitch_range[0]) / (pitch_range[1] - pitch_range[0])));
+    q_motor_temp_head[2] = int(yaw_command_range[0] + (yaw_command_range[1] - yaw_command_range[0]) *
+                        ((-(head_angles(2)*180/M_PI) - yaw_range[0]) / (yaw_range[1] - yaw_range[0])));
+
+
+    head_motor_commands_ = q_motor_temp_head; // Store for RobotManager
+
+    // Head joints
+    q_gazebo_temp_head[0] = -head_angles(0); // roll
+    q_gazebo_temp_head[1] = -head_angles(1); // pitch
+    q_gazebo_temp_head[2] = -head_angles(2); // yaw
+
+
+    head_gazebo_commands_ = q_gazebo_temp_head; // Store for RobotManager
+}
+
 // --- Service Handler Implementations ---
 bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
                               hand_planner::move_hand_single::Response &res)
@@ -597,7 +635,7 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             q_left_send.head(4) = q_left_send.head(4) - q_left_baseline_.head(4);
 
             Eigen::Vector3d head_angles(0,0,0);
-            head_follow_hand(RIGHT, q_send);
+            // head_follow_hand(RIGHT, q_send);
             // Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
 
             sendHandMotorCommands(q_send, q_left_send, head_angles);
@@ -655,10 +693,11 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             q_right_send.head(4) = q_right_send.head(4) - q_right_baseline_.head(4);
 
             Eigen::Vector3d head_angles(0,0,0);
-            head_follow_hand(LEFT, q_send_l);
+            // head_follow_hand(LEFT, q_send_l);
             //// Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
 
             sendHandMotorCommands(q_right_send, q_send_l, head_angles);
+            sendHeadMotorCommands(head_angles);
             publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
         }
@@ -1064,81 +1103,94 @@ void HandManager::head_keyboard_callback(const std_msgs::Int32::ConstPtr& msg)
     if (!isHeadKeyboardActive) {
         return;
     }
+    h_pitch_start_actual = 0.0;
+    h_yaw_start_actual = 0.0;
+    h_roll_start_actual = 0.0;
+    h_pitch_target_set = 0.0;
+    h_yaw_target_set = 0.0;
+    h_roll_target_set = 0.0;
+    head_motion_segment_duration = 0.9; 
+    is_head_moving_segment = false;
+    interpolation_step_count = 0;
+    total_interpolation_steps = 0; 
 
-    const double HEAD_ANGLE_INCREMENT_DEGREES = 10.0;
+    total_interpolation_steps = static_cast<int>(head_motion_segment_duration * rate);
+
+    if (!isHeadKeyboardActive) {
+        return;
+    }
+
+    const double HEAD_ANGLE_INCREMENT_DEGREES = 15.0;
     const double HEAD_ANGLE_INCREMENT_RAD = HEAD_ANGLE_INCREMENT_DEGREES * M_PI / 180.0; 
 
-    static const double YAW_MIN_RAD   = -80.0 * M_PI / 180.0;
-    static const double YAW_MAX_RAD   =  80.0 * M_PI / 180.0;
-    static const double PITCH_MIN_RAD = -35.0 * M_PI / 180.0;
-    static const double PITCH_MAX_RAD =  35.0 * M_PI / 180.0;
+    static const double YAW_MIN_RAD   = -60.0 * M_PI / 180.0;
+    static const double YAW_MAX_RAD   =  60.0 * M_PI / 180.0;
+    static const double PITCH_MIN_RAD = -28.0 * M_PI / 180.0;
+    static const double PITCH_MAX_RAD =  28.0 * M_PI / 180.0;
+    static const double ROLL_MIN_RAD = -20.0 * M_PI / 180.0;
+    static const double ROLL_MAX_RAD =  20.0 * M_PI / 180.0;
 
     auto clamp = [](double v, double lo, double hi){ return std::max(lo,std::min(hi,v)); };
 
     int key_code = msg->data; 
 
     if (key_code == 27) { // ASCII code for ESC key
-        isHeadKeyboardActive = false; 
-        return; 
+        isHeadKeyboardActive = false;
+        is_head_moving_segment = false; 
+        interpolation_step_count = 0; 
+        return;
     }
 
-    bool command_processed = false; 
+    h_pitch_start_actual = h_pitch;
+    h_yaw_start_actual = h_yaw;
+    h_roll_start_actual = h_roll;
+    h_pitch_target_set = h_pitch;
+    h_yaw_target_set = h_yaw;
+    h_roll_target_set = h_roll;
+
+    bool command_processed = false;
 
     switch (key_code) {
-        case 105: 
-            h_pitch += HEAD_ANGLE_INCREMENT_RAD;
+        case 105: // 'i'
+            h_pitch_target_set += HEAD_ANGLE_INCREMENT_RAD;
             command_processed = true;
             break;
-        case 107: 
-            h_pitch -= HEAD_ANGLE_INCREMENT_RAD;
+        case 107: // 'k'
+            h_pitch_target_set -= HEAD_ANGLE_INCREMENT_RAD;
             command_processed = true;
             break;
-        case 106: 
-            h_yaw += HEAD_ANGLE_INCREMENT_RAD;
+        case 106: // 'j'
+            h_yaw_target_set += HEAD_ANGLE_INCREMENT_RAD;
             command_processed = true;
             break;
-        case 108: 
-            h_yaw -= HEAD_ANGLE_INCREMENT_RAD;
+        case 108: // 'l'
+            h_yaw_target_set -= HEAD_ANGLE_INCREMENT_RAD;
+            command_processed = true;
+            break;
+        case 117: // 'u' 
+            h_roll_target_set += HEAD_ANGLE_INCREMENT_RAD - 12;
+            command_processed = true;
+            break;
+        case 111: // 'o' (
+            h_roll_target_set -= HEAD_ANGLE_INCREMENT_RAD - 12;
             command_processed = true;
             break;
         default:
-            return;
+            return; 
     }
 
-    h_pitch = clamp(h_pitch, PITCH_MIN_RAD, PITCH_MAX_RAD);
-    h_yaw   = clamp(h_yaw,   YAW_MIN_RAD,   YAW_MAX_RAD);
+    h_pitch_target_set = clamp(h_pitch_target_set, PITCH_MIN_RAD, PITCH_MAX_RAD);
+    h_yaw_target_set   = clamp(h_yaw_target_set,   YAW_MIN_RAD,   YAW_MAX_RAD);
+    h_roll_target_set  = clamp(h_roll_target_set,  ROLL_MIN_RAD,  ROLL_MAX_RAD);
 
-    Eigen::VectorXd q_left(7);
-    if (q_left_state_.size()==7){
-        q_left = q_left_state_;
+    if (command_processed && (std::abs(h_pitch_target_set - h_pitch_start_actual) > 1e-6 || std::abs(h_yaw_target_set - h_yaw_start_actual) > 1e-6 || std::abs(h_roll_target_set - h_roll_start_actual) > 1e-6)) {
+        interpolation_step_count = 0; 
+        is_head_moving_segment = true;
     } else {
-        q_left.resize(7);
-        q_left << 10.0*M_PI/180.0, 10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
+        is_head_moving_segment = false; 
+        interpolation_step_count = 0;
     }
-    if (q_left_baseline_.size() != 7) {
-        q_left_baseline_ = q_left;
-    }
-
-    Eigen::VectorXd q_right(7);
-    if (q_right_state_.size()==7){
-        q_right = q_right_state_;
-    } else {
-        q_right.resize(7);
-        q_right << 10.0*M_PI/180.0, -10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
-    }
-    if (q_right_baseline_.size() != 7) {
-        q_right_baseline_ = q_right;
-    }
-
-    Eigen::VectorXd q_right_send = q_right;
-    q_right_send.head(4) = q_right_send.head(4) - q_right_baseline_.head(4);
-        
-    Eigen::VectorXd q_left_send = q_left;
-    q_left_send.head(4) = q_left_send.head(4) - q_left_baseline_.head(4);
-
-    Vector3d head_angles(h_roll, h_pitch, h_yaw);
-    sendHandMotorCommands(q_right_send, q_left_send, head_angles);
-    publish_trigger_pub_.publish(std_msgs::Empty());    
+ 
 }
 
 
@@ -1148,14 +1200,81 @@ bool HandManager::move_head_keyboard_handler(hand_planner::headkeyboardjog::Requ
 {
 
     isHeadKeyboardActive = true;
-    ros::Rate loop_rate(rate);
+    ros::Rate loop_rate(rate); 
+
+    h_pitch_target_set = h_pitch; 
+    h_yaw_target_set = h_yaw;     
+    h_roll_target_set = h_roll;
+    is_head_moving_segment = false;
+    interpolation_step_count = 0; 
+
     while (ros::ok() && isHeadKeyboardActive)
     {
-        ros::spinOnce(); 
-        loop_rate.sleep();
+        ros::spinOnce();
+
+        if (is_head_moving_segment) {
+            interpolation_step_count++;
+
+            if (interpolation_step_count<= total_interpolation_steps) {
+
+                double alpha = static_cast<double>(interpolation_step_count) / total_interpolation_steps;
+                alpha = std::min(1.0, alpha); 
+
+                h_pitch = h_pitch_start_actual + alpha * (h_pitch_target_set - h_pitch_start_actual);
+                h_yaw   = h_yaw_start_actual   + alpha * (h_yaw_target_set   - h_yaw_start_actual);
+                h_roll  = h_roll_start_actual  + alpha * (h_roll_target_set  - h_roll_start_actual);
+
+            } else {
+                h_pitch = h_pitch_target_set;
+                h_yaw   = h_yaw_target_set;
+                h_roll  = h_roll_target_set;
+
+                is_head_moving_segment = false; 
+                interpolation_step_count = 0; 
+            }
+        }
+
+        Eigen::VectorXd q_left(7);
+        if (q_left_state_.size()==7){
+            q_left = q_left_state_;
+        } else {
+            q_left.resize(7);
+            q_left << 10.0*M_PI/180.0, 10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
+        }
+        if (q_left_baseline_.size() != 7) {
+            q_left_baseline_ = q_left;
+        }
+
+        Eigen::VectorXd q_right(7);
+        if (q_right_state_.size()==7){
+            q_right = q_right_state_;
+        } else {
+            q_right.resize(7);
+            q_right << 10.0*M_PI/180.0, -10.0*M_PI/180.0, 0.0, -25.0*M_PI/180.0, 0.0, 0.0, 0.0;
+        }
+        if (q_right_baseline_.size() != 7) {
+            q_right_baseline_ = q_right;
+        }
+
+        Eigen::VectorXd q_right_send = q_right;
+        q_right_send.head(4) = q_right_send.head(4) - q_right_baseline_.head(4);
+
+        Eigen::VectorXd q_left_send = q_left;
+        q_left_send.head(4) = q_left_send.head(4) - q_left_baseline_.head(4);
+
+        // sendHandMotorCommands(q_right_send, q_left_send);
+        Vector3d head_angles(h_roll, h_pitch, h_yaw);
+        sendHeadMotorCommands(head_angles);
+        // sendHandMotorCommands(q_right_send, q_left_send, head_angles);
+        publish_trigger_pub_.publish(std_msgs::Empty());
+        // cout << head_angles[0] << ", " << head_angles[1] << ", " << head_angles[2] << endl;
+
+        loop_rate.sleep(); 
     }
 
     isHeadKeyboardActive = false;
+    is_head_moving_segment = false;
+    interpolation_step_count = 0; 
     res.success = true;
     res.message = "Head keyboard control stopped.";
     ROS_INFO("%s", res.message.c_str());
@@ -1821,7 +1940,7 @@ bool HandManager::arm_back_to_home_handler(hand_planner::arm_back_to_home::Reque
         publish_trigger_pub_.publish(std_msgs::Empty());
     };
 
-    // Move motor 5 (index 4) back to home first 
+    // Move motor 3 (index 2) back to home first 
     {
         double start_r = q_work_r(2);
         double end_r   = q_target_r(2);

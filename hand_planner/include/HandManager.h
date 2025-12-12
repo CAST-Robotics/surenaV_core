@@ -53,6 +53,8 @@ public:
 
     const std::vector<double>& getHandMotorCommands() const;
     const std::vector<double>& getHandGazeboCommands() const;
+    const std::vector<double>& getHeadMotorCommands() const;
+    const std::vector<double>& getHeadGazeboCommands() const;
     const std::vector<double>& getFingerMotorCommands() const;
 
 private:
@@ -106,6 +108,8 @@ private:
     vector<double> last_q_motor;
     vector<double> hand_motor_commands_ = std::vector<double>(29, 0);
     vector<double> hand_gazebo_commands_ = std::vector<double>(29, 0.0);
+    vector<double> head_motor_commands_ = std::vector<double>(3, 0.0);
+    vector<double> head_gazebo_commands_ = std::vector<double>(3, 0.0);
     mutable std::mutex command_mutex_;
     Vector2d right_wrist_res_temp;
 
@@ -147,6 +151,9 @@ private:
     double Kp, Ky;
     double t_grip;
     double micArray_theta;
+    double h_pitch_start_actual, h_yaw_start_actual, h_pitch_target_set, h_yaw_target_set, h_roll_start_actual, h_roll_target_set, head_motion_segment_duration;
+    bool is_head_moving_segment;
+    int interpolation_step_count, total_interpolation_steps;
     int target_class_id_ = 41;
     std::mutex target_mutex_;
     std::mutex hands_mutex_;
@@ -160,6 +167,7 @@ private:
     void head_keyboard_callback(const std_msgs::Int32::ConstPtr& msg);
     void hallSensorCallback(const std_msgs::Int32& msg);
     void sendHandMotorCommands(const VectorXd& q_rad_right, const VectorXd& q_rad_left, const Vector3d& head_angles);
+    void sendHeadMotorCommands(const Vector3d& head_angles);
 
     MatrixXd scenario_target(HandType type, string scenario, int i, VectorXd ee_pos, string ee_ini_pos);
     VectorXd reach_target(S5_hand& hand_model, VectorXd& q_arm, MatrixXd& qref_arm, double& sum_arm, VectorXd& q_init_arm, MatrixXd targets, string scenario, int M);
