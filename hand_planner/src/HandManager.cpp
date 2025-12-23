@@ -237,7 +237,7 @@ MatrixXd HandManager::scenario_target(HandType type, string scenario, int i, Vec
         r_middle = (type == RIGHT) ? Vector3d(0.15, -0.1, -0.1) : Vector3d(0.15, 0.1, -0.1);
         r_target = (type == RIGHT) ? Vector3d(0.35, 0.1, 0.1) : Vector3d(0.35, -0.1, 0.1);
         double rot_angle = (type == RIGHT) ? 90 * M_PI / 180 : -90 * M_PI / 180;
-        R_target = hand_func.rot(3, rot_angle, 3) * hand_func.rot(1, -0 * M_PI / 180, 3);
+        R_target = hand_func.rot(3, rot_angle, 3) * hand_func.rot(1, -90 * M_PI / 180, 3);
     } else if (scenario == "perfect") {
         r_middle = (type == RIGHT) ? Vector3d(0.15, -0.1, -0.3) : Vector3d(0.15, 0.1, -0.3);
         r_target = (type == RIGHT) ? Vector3d(0.25, -0.05, -0.25) : Vector3d(0.25, 0.15, -0.15);
