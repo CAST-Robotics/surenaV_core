@@ -193,6 +193,17 @@ bool RobotManager::execute_step(const YAML::Node& step) {
         if (!client.call(srv)) { ROS_ERROR("Service call to %s failed.", service_name.c_str()); return false; }
         return srv.response.ok;
 
+    } else if (service_name == "/move_hands_general_srv") {
+        ros::ServiceClient client = nh_->serviceClient<hand_planner::MoveHandsGeneral>(service_name);
+        hand_planner::MoveHandsGeneral srv;
+        srv.request.right_commands = params["right_commands"].as<std::vector<std::string>>();
+        srv.request.left_commands  = params["left_commands"].as<std::vector<std::string>>();
+        srv.request.right_enable = params["right_enable"].as<bool>();
+        srv.request.left_enable  = params["left_enable"].as<bool>();
+        srv.request.go_home_on_finish = params["go_home_on_finish"].as<bool>();
+        if (!client.call(srv)) {ROS_ERROR("Service call to %s failed.", service_name.c_str());return false;}
+        return srv.response.ok;
+    
     } else if (service_name == "/move_hand_general_left_srv") {
         ros::ServiceClient client = nh_->serviceClient<hand_planner::MoveHandGeneral>(service_name);
         hand_planner::MoveHandGeneral srv;

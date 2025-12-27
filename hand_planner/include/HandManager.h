@@ -112,6 +112,7 @@ private:
     vector<double> head_gazebo_commands_ = std::vector<double>(3, 0.0);
     mutable std::mutex command_mutex_;
     Vector2d right_wrist_res_temp;
+    Vector2d left_wrist_res_temp;
 
     
     double sum_r;

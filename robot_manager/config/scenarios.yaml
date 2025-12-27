@@ -174,3 +174,171 @@ scenarios:
         commands:
           - "rel  0 0 0  0 0 -20"
         go_home_on_finish: false
+  #scenario 6:move_hands_talking_37
+  move_hands_talking_long:
+
+    - service: "/move_hand_both_srv"
+      blocking: true
+      params:
+        ee_ini_posR: "a"
+        scenarioR: ["a"]
+        scenR_count: 1
+        ee_ini_posL: "a"
+        scenarioL: ["a"]
+        scenL_count: 1
+        t_total: 4
+
+    - service: "/get_data"
+      blocking: true
+      params:
+        time: 1
+
+    - service: "/move_hands_general_srv"
+      blocking: true
+      params:
+        right_commands: 
+          - "rel 0.0  0.05 0.0  0 -30 -15"
+        left_commands: 
+          - "rel 0.0 -0.05 0.0  0 -30 -15"
+        right_enable: true
+        left_enable: true
+        go_home_on_finish: false
+
+    - service: "/get_data"
+      blocking: true
+      params:
+        time: 1
+
+    - service: "/move_hands_general_srv"
+      blocking: true
+      params:
+        right_commands: ['rel -0.02 -0.07 0.0  0 10 -40']
+        left_commands: ['rel -0.02 0.07 0.0  0 10 -40 ']
+        right_enable: true
+        left_enable: true
+        go_home_on_finish: false
+
+    - service: "/get_data"
+      blocking: true
+      params:
+        time: 1
+
+    - service: "/move_hands_general_srv"
+      blocking: true
+      params:
+        right_commands: ['rel 0.02 0.04 0.05  0 0 35']
+        left_commands: ['rel 0.0 0.0 0.0  0 0 35']
+        right_enable: true
+        left_enable: true
+        go_home_on_finish: false
+
+    - service: "/move_hand_single_srv"
+      blocking: true
+      params:
+        mode: "righthand"
+        ee_ini_pos: "init"
+        scenario: ["b"]
+        scen_count: 1
+        t_total: 4
+
+    - service: "/get_data"
+      blocking: true
+      params:
+        time: 1
+
+    - service: "/move_hands_general_srv"
+      blocking: true
+      params:
+        right_commands: ['rel 0.0 0.0 -0.03  0 0 -40']
+        left_commands: ['rel -0.05 0.0 -0.03  0 0 -50 ']
+        right_enable: true
+        left_enable: true
+        go_home_on_finish: false
+
+    - service: "/get_data"
+      blocking: true
+      params:
+        time: 1
+
+    - service: "/move_hands_general_srv"
+      blocking: true
+      params:
+        right_commands: ['rel 0.0 -0.05 -0.07  0 0 0']
+        left_commands: ['rel -0.02 0.03 -0.02  0 0 -20']
+        right_enable: true
+        left_enable: true
+        go_home_on_finish: false
+
+    - service: "/move_hand_single_srv"
+      blocking: true
+      params:
+        mode: "righthand"
+        ee_ini_pos: "init"
+        scenario: ["home"]
+        scen_count: 1
+        t_total: 4
+
+    - service: "/arm_back_to_home_srv"
+      blocking: true
+
+
+ #scenario 7:move_hands_talking_20
+  move_hands_talking_short:
+    - service: "/move_hand_both_srv"
+      blocking: true
+      params:
+        ee_ini_posR: "a"
+        scenarioR: ["a"]
+        scenR_count: 1
+        ee_ini_posL: "a"
+        scenarioL: ["a"]
+        scenL_count: 1
+        t_total: 4
+
+    - service: "/get_data"
+      blocking: true
+      params:
+        time: 1
+
+    - service: "/move_hands_general_srv"
+      blocking: true
+      params:
+        right_commands: 
+          - "rel 0.0  0.05 0.0  0 -30 -15"
+        left_commands: 
+          - "rel 0.0 -0.05 0.0  0 -30 -15"
+        right_enable: true
+        left_enable: true
+        go_home_on_finish: false
+
+    - service: "/get_data"
+      blocking: true
+      params:
+        time: 1
+
+    - service: "/move_hands_general_srv"
+      blocking: true
+      params:
+        right_commands: ['rel -0.02 -0.07 0.0  0 10 -40']
+        left_commands: ['rel -0.02 0.07 0.0  0 10 -40 ']
+        right_enable: true
+        left_enable: true
+        go_home_on_finish: false
+
+    - service: "/get_data"
+      blocking: true
+      params:
+        time: 1
+        
+    - service: "/move_hand_single_srv"
+      blocking: true
+      params:
+        mode: "righthand"
+        ee_ini_pos: "init"
+        scenario: ["home"]
+        scen_count: 1
+        t_total: 4
+
+    - service: "/arm_back_to_home_srv"
+      blocking: true
+           
