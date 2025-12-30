@@ -52,8 +52,11 @@ GaitManager::GaitManager(ros::NodeHandle *n)
     // int temp_home_abs[12] = {123722, 166000, 135273, 11167, 132676, 131435, 146513, 146399, 124614, 63552, 132714, 141488};
     //int temp_home_abs[12] = {121674, 165602, 133545, 8543, 135032, 131243, 144913, 148255, 126278, 63168, 129706, 142032};
     // int temp_home_abs[12] = {121738, 165474, 133497, 8351, 135224, 130539, 144913, 148127, 126543, 63040, 128618, 143120};
-    int temp_home_abs[12] = {121930, 164962, 132713, 8031, 133048, 130923, 145121, 144799, 126854, 61824, 130858, 140368}; //home Mr. Maleki
     //int temp_home_abs[12] = {121690, 164962, 133353, 8031, 133048, 130923, 143505, 144799, 126918, 61824, 130858, 140368}; //home Mr. Maleki
+    //int temp_home_abs[12] = {121930, 164962, 132713, 8031, 133048, 130923, 145121, 144799, 126854, 61824, 130858, 140368};
+    //int temp_home_abs[12] = {121930, 165026, 132777, 7839, 133752, 130731, 145105, 144863, 126918, 61824, 130986, 139536};
+    int temp_home_abs[12] = {121802, 164962, 133865, 7967, 132152, 131115, 143489, 145631, 126726, 61760, 131818, 140048}; //home Mr. Maleki2
+
 
     int temp_abs_high[12] = {108426, 119010, 89733, 136440, 71608, 102443, 119697, 82527, 168562, 160000, 191978, 111376};
     int temp_abs_low[12] = {145354, 183778, 194153, 7000, 203256, 160491, 160225, 180000, 61510, 61000, 61482, 172752};
@@ -904,7 +907,7 @@ void GaitManager::keyboardHandler(const std_msgs::Int32 &msg)
         {
         case 119: // w: move forward with arm swing
             step_count = 4;
-            step_length = 0.16;
+            step_length = 0.12;
             theta = 0.0;
             robot->trajGen(step_count, t_step, alpha, t_double_support, COM_height, step_length, 
                            step_width, dt, theta, ankle_height, step_height, slope, offset, is_config);
@@ -933,7 +936,7 @@ void GaitManager::keyboardHandler(const std_msgs::Int32 &msg)
 
         case 115: // s: move backward
             step_count = 2;
-            step_length = -0.15;
+            step_length = -0.10;
             theta = 0.0;
             robot->trajGen(step_count, t_step, alpha, t_double_support, COM_height, step_length, 
                            step_width, dt, theta, ankle_height, step_height, slope, offset, is_config);

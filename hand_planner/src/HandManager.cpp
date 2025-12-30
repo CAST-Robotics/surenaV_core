@@ -57,6 +57,7 @@ HandManager::HandManager(ros::NodeHandle *n) :
     left_state_init_ = true;
 
     sendHandMotorCommands(VectorXd::Zero(7), VectorXd::Zero(7), Vector3d::Zero());
+    sendHeadMotorCommands(Vector3d::Zero());
 
     // ROS Communication Setup
     publish_trigger_pub_         = n->advertise<std_msgs::Empty>("robot_manager/publish_trigger", 1);
@@ -658,9 +659,6 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             // Eigen::Vector3d head_angles(0,0,0);
             // head_follow_hand(RIGHT, q_send);
             Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
-            
-            // Eigen::VectorXd angles_send(7);
-            // angles_send << 0.0 , 0.0 , 0.0, 0.0, 0*M_PI/180.0, 40.0*M_PI/180.0, 0.0*M_PI/180.0;
 
             sendHandMotorCommands(q_send, q_left_send, head_angles);
             publish_trigger_pub_.publish(std_msgs::Empty());
@@ -720,10 +718,7 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             // head_follow_hand(LEFT, q_send_l);
             Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
 
-            Eigen::VectorXd angles_send(7);
-            angles_send << 0.0 , 0.0 , 0.0, 0.0, 0*M_PI/180.0, 40.0*M_PI/180.0, 0.0*M_PI/180.0;
-
-            sendHandMotorCommands(q_right_send, angles_send, head_angles);
+            sendHandMotorCommands(q_right_send, q_send_l, head_angles);
             sendHeadMotorCommands(head_angles);
             publish_trigger_pub_.publish(std_msgs::Empty());
             rate_.sleep();
@@ -931,6 +926,7 @@ bool HandManager::head_track_handler(hand_planner::head_track::Request &req, han
         q_left_send.head(4) = q_left_send.head(4) - q_left_baseline_.head(4);
 
         Vector3d head_angles(h_roll, h_pitch, h_yaw);
+        sendHeadMotorCommands(head_angles);
         sendHandMotorCommands(q_right_send, q_left_send, head_angles);
         publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
@@ -1073,12 +1069,12 @@ void HandManager::hand_keyboard_callback(const std_msgs::Int32::ConstPtr& msg)
     
     double dx=0, dy=0, dz=0;
     switch (code) {
-        case 'w': case 'W': dx = +0.05; break; // Forward
-        case 's': case 'S': dx = -0.05; break; // Backward
-        case 'a': case 'A': dy = +0.10; break; // To the left
-        case 'd': case 'D': dy = -0.10; break; // To the right
-        case 'u': case 'U': dz = +0.10; break; // Upward
-        case 'j': case 'J': dz = -0.10; break; // Downward
+        case 't': case 'T': dx = +0.05; break; // Forward
+        case 'g': case 'G': dx = -0.05; break; // Backward
+        case 'f': case 'F': dy = +0.10; break; // To the left
+        case 'h': case 'H': dy = -0.10; break; // To the right
+        case 'i': case 'I': dz = +0.10; break; // Upward
+        case 'k': case 'K': dz = -0.10; break; // Downward
         default: return;
     }
 
@@ -1950,7 +1946,7 @@ bool HandManager::arm_back_to_home_handler(hand_planner::arm_back_to_home::Reque
     q_target_l(6) = q_l(6);
 
     // Params
-    double segment_duration = 6;
+    double segment_duration = 2;
     if (segment_duration <= 0.0) segment_duration = T;
     int M_segment = static_cast<int>(segment_duration / T);
     if (M_segment == 0) M_segment = 1;
@@ -1974,8 +1970,8 @@ bool HandManager::arm_back_to_home_handler(hand_planner::arm_back_to_home::Reque
         double start_l = q_work_l(2);
         double end_l   = q_target_l(2);
 
-        for (int step = 0; step <= M_segment; ++step) {
-            double a = (M_segment > 0) ? static_cast<double>(step)/M_segment : 1.0;
+        for (int step = 0; step <= (M_segment-1); ++step) {
+            double a = (M_segment > 0) ? static_cast<double>(step)/(M_segment-1) : 1.0;
             q_work_r(2) = start_r + (end_r - start_r)*a;
             q_work_l(2) = start_l + (end_l - start_l)*a;
             pub(q_work_r,q_work_l);
@@ -2034,14 +2030,14 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
     const double ROLL_OPEN_ANGLE = 10.0 * M_PI / 180;
 
     // Joint offsets for homing at desired angles in radians
-    const double RIGHT_PITCH_OFFSET = 26.0 * M_PI / 180;
-    const double RIGHT_ROLL_OFFSET = 7.0 * M_PI / 180;
+    const double RIGHT_PITCH_OFFSET = 25.0 * M_PI / 180;
+    const double RIGHT_ROLL_OFFSET = 2.0 * M_PI / 180;
     const double RIGHT_YAW_OFFSET = 93.0 * M_PI / 180;
-    const double RIGHT_ELBOW_OFFSET = 14.0 * M_PI / 180;
-    const double LEFT_PITCH_OFFSET = 28.0 * M_PI / 180;
+    const double RIGHT_ELBOW_OFFSET = 12.0 * M_PI / 180;
+    const double LEFT_PITCH_OFFSET = 33.0 * M_PI / 180;
     const double LEFT_ROLL_OFFSET = 9.0 * M_PI / 180;
     const double LEFT_YAW_OFFSET = 103.0 * M_PI / 180;
-    const double LEFT_ELBOW_OFFSET = 19.0 * M_PI / 180;
+    const double LEFT_ELBOW_OFFSET = 21.0 * M_PI / 180;
     
     // Initialize joint positions (default to zero)
     Eigen::VectorXd q_right_current(7);
