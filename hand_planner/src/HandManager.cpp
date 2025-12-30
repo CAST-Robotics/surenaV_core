@@ -285,16 +285,16 @@ MatrixXd HandManager::scenario_target(HandType type, string scenario, int i, Vec
 }
 
 VectorXd HandManager::reach_target(S5_hand& hand_model, VectorXd& q_arm, MatrixXd& qref_arm, double& sum_arm, VectorXd& q_init_arm, MatrixXd targets, string scenario, int M) {
-    qref_arm.resize(7, M);
-    Vector3d r_middle = targets.row(0), r_target = targets.row(1), r_start = targets.row(5);
+qref_arm.resize(7, M);
+
+    Vector3d r_middle = targets.row(0);
+    Vector3d r_target = targets.row(1);
+    Vector3d r_start  = targets.row(5);
     Matrix3d R_target = targets.block(2, 0, 3, 3);
 
-    // --- reach (min-jerk) timing: 0 -> 2 -> 4 sec ---
-    MatrixXd t_r(1,3); 
-    t_r << 0, 2, 4;
-    const double t_reach_end = t_r(2);
+    MatrixXd t_r(1,3); t_r << 0, 2, 4;
+    const double t_reach_end = 4.0;
 
-    // --- min-jerk coefficients for the reach phase ---
     MatrixXd P_x(1,3), P_y(1,3), P_z(1,3);
     P_x << r_start(0), r_middle(0), r_target(0);
     P_y << r_start(1), r_middle(1), r_target(1);
@@ -303,123 +303,95 @@ VectorXd HandManager::reach_target(S5_hand& hand_model, VectorXd& q_arm, MatrixX
     MatrixXd V_inf(1,3); V_inf << 0, INFINITY, 0;
     MatrixXd A_inf(1,3); A_inf << 0, INFINITY, 0;
 
-    // define minJerk elements to calculate end effector velocity
     MatrixXd X_coef = coef_generator.Coefficient(t_r, P_x, V_inf, A_inf);
     MatrixXd Y_coef = coef_generator.Coefficient(t_r, P_y, V_inf, A_inf);
     MatrixXd Z_coef = coef_generator.Coefficient(t_r, P_z, V_inf, A_inf);
 
-    // --- SHAKE (shakeHands) params ---
-    const double T_DWELL = 1.0;      // 1s pause on target
-    const double T_SHAKE = 4.0;      // 4s sine motion window
+    const double T_BYE     = 4.0;
+    const double AMP_BYE   = 15 * M_PI / 180.0;
+    const double OMEGA_BYE = M_PI * 1.5;
+
+    VectorXd q_frozen = VectorXd::Zero(7);
+    bool freeze_ready = false;
+
+
+    const double T_DWELL = 1.0;
+    const double T_SHAKE = 4.0;
     const double t_shake_start = t_reach_end + T_DWELL;
-    bool   shake_ready = false;      // anchor latch
-    double q3_base = 0.0;            // joint-3 anchor
-    const double AMP_J3 = 10 * M_PI / 180.0; 
-    const double OMEGA  = M_PI;      // cos(pi * t) over 4s (one full cycle)
 
-    // --- BYEBYE slide params (alternate L/R using Write_y_axis) ---
-    const double a_y_total  = 0.10;  // 10 cm per segment
-    const double T_slide    = 0.8;   // seconds per segment
-    const int    N_segments = 5;     // L, R, L, R
-    bool   slide_ready = false;
-    Vector3d r_anchor = Vector3d::Zero();
-    handWriting hw;
-    const int base_sign = +1;
+    const double AMP_J3 = 10 * M_PI / 180.0;
+    const double OMEGA  = M_PI;
 
-    int    seg_idx  = 0;     // 0..N_segments-1
-    double y_base   = 0.0;   // accumulated offset wrt anchor
-    int    seg_sign = +1;    // +1 left, -1 right (multiplied by base_sign)
-    double seg_t0   = 0.0;   // segment start time
+    bool   shake_ready = false;
+    double q3_base     = 0.0;
 
-    // --- total time & steps ---
+
     double total_time = t_reach_end;
-    if (scenario == "byebye")          total_time += N_segments * T_slide;
-    else if (scenario == "shakeHands") total_time += T_DWELL + T_SHAKE;
+    if (scenario == "byebye")
+        total_time += T_BYE;
+    else if (scenario == "shakeHands")
+        total_time += T_DWELL + T_SHAKE;
 
     int step_count = static_cast<int>(total_time / T);
 
-    // --- main loop ---
+
     for (int count = 0; count < step_count; ++count) {
         double time_r = count * T;
+        VectorXd q_next = VectorXd::Zero(7);
 
         if (time_r < t_reach_end) {
-            // ----- reach phase with min-jerk velocities -----
-            const int interval  = (time_r < t_r(1)) ? 0 : 1;
-            const double t_int  = (time_r < t_r(1)) ? t_r(0) : t_r(1);
+
+            const int interval = (time_r < t_r(1)) ? 0 : 1;
+            const double t_int = (interval == 0) ? t_r(0) : t_r(1);
 
             Vector3d V_curr;
-            V_curr << coef_generator.GetAccVelPos(X_coef.row(interval), time_r, t_int, 5)(0,1),
-                      coef_generator.GetAccVelPos(Y_coef.row(interval), time_r, t_int, 5)(0,1),
-                      coef_generator.GetAccVelPos(Z_coef.row(interval), time_r, t_int, 5)(0,1);
+            V_curr <<
+                coef_generator.GetAccVelPos(X_coef.row(interval), time_r, t_int, 5)(0,1),
+                coef_generator.GetAccVelPos(Y_coef.row(interval), time_r, t_int, 5)(0,1),
+                coef_generator.GetAccVelPos(Z_coef.row(interval), time_r, t_int, 5)(0,1);
 
             hand_model.update_hand(q_arm, V_curr, r_target, R_target);
-
-            // reset post-reach states until we actually enter their phase
-            slide_ready = false;
-            shake_ready = false;
+            hand_model.doQP(q_arm);
+            q_next = hand_model.q_next;
         }
         else {
+
             if (scenario == "byebye") {
-                // ----- alternating left/right slide along Y using Write_y_axis -----
-                if (!slide_ready) {
-                    hand_model.HO_FK_palm(q_arm);
-                    r_anchor = hand_model.r_palm;
-                    hw.t  = 0.0; hw.dt = T;
-                    seg_idx  = 0;
-                    y_base   = 0.0;
-                    seg_sign = +1;   // start with "left"
-                    seg_t0   = time_r;
-                    slide_ready = true;
+                if (!freeze_ready) {
+                    q_frozen = q_arm;      // latch once at 4s
+                    freeze_ready = true;
                 }
 
-                if (seg_idx < N_segments) {
-                    const double t_local = time_r - seg_t0;
-                    if (t_local <= T_slide + 1e-9) {
-                        hw.Write_y_axis(a_y_total, T_slide);
-                        const double y_pos = y_base + (base_sign * seg_sign) * hw.P;
-                        const double y_vel = (base_sign * seg_sign) * hw.V_y;
+                q_next = q_frozen;
+                double t_local = time_r - t_reach_end;
+                q_next(2) = q_frozen(2) + AMP_BYE * std::sin(OMEGA_BYE * t_local);
+            }
 
-                        const Vector3d r_cmd = r_anchor + Vector3d(0.0, y_pos, 0.0);
-                        const Vector3d V_cmd(0.0, y_vel, 0.0);
-                        hand_model.update_hand(q_arm, V_cmd, r_cmd, R_target);
-                    } else {
-                        // segment finished -> latch end, prepare next
-                        y_base   += (base_sign * seg_sign) * a_y_total;
-                        seg_sign  = -seg_sign;
-                        ++seg_idx;
+            else if (scenario == "shakeHands") {
 
-                        hw.t   = 0.0;
-                        seg_t0 = time_r;
+                hand_model.update_hand(q_arm, Vector3d::Zero(), r_target, R_target);
+                hand_model.doQP(q_arm);
+                q_next = hand_model.q_next;
 
-                        const Vector3d r_cmd = r_anchor + Vector3d(0.0, y_base, 0.0);
-                        hand_model.update_hand(q_arm, Vector3d::Zero(), r_cmd, R_target);
+                if (time_r >= t_shake_start) {
+                    if (!shake_ready) {
+                        q3_base = q_next(3);
+                        shake_ready = true;
                     }
-                } else {
-                    // done: hold last
-                    const Vector3d r_cmd = r_anchor + Vector3d(0.0, y_base, 0.0);
-                    hand_model.update_hand(q_arm, Vector3d::Zero(), r_cmd, R_target);
+
+                    double t_local = time_r - t_shake_start;
+                    if (t_local <= T_SHAKE + 1e-9) {
+                        q_next(3) = q3_base - AMP_J3 * std::sin(OMEGA * (t_local + 1));
+                    } else {
+                        q_next(3) = q3_base;
+                    }
                 }
             }
             else {
-                // other scenarios: just hold at target
                 hand_model.update_hand(q_arm, Vector3d::Zero(), r_target, R_target);
+                hand_model.doQP(q_arm);
+                q_next = hand_model.q_next;
             }
-        }
-
-        // ----- solve IK/QP -----
-        hand_model.doQP(q_arm);
-        VectorXd q_next = hand_model.q_next;
-
-        // ----- enforce joint-3 sine AFTER QP for shakeHands, only after dwell -----
-        if (scenario == "shakeHands" && time_r >= t_shake_start) {
-            if (!shake_ready) {
-                q3_base = q_next(3);   // latch base once at start of shake
-                shake_ready = true;
-            }
-            const double t_local = time_r - t_shake_start;
-            const double q3_des  = (t_local <= T_SHAKE + 1e-9) ? q3_base - AMP_J3 * std::sin(OMEGA * (t_local+1)) : q3_base;
-
-            q_next(3) = q3_des;
         }
 
         q_arm = q_next;
@@ -434,6 +406,7 @@ VectorXd HandManager::reach_target(S5_hand& hand_model, VectorXd& q_arm, MatrixX
     hand_model.HO_FK_palm(q_arm);
     return hand_model.r_palm;
 }
+
 
 Vector2d HandManager::head_follow_hand(HandType type, const VectorXd& q_arm)
 {
