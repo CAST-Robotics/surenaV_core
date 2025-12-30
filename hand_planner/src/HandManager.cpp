@@ -57,6 +57,7 @@ HandManager::HandManager(ros::NodeHandle *n) :
     left_state_init_ = true;
 
     sendHandMotorCommands(VectorXd::Zero(7), VectorXd::Zero(7), Vector3d::Zero());
+    sendHeadMotorCommands(Vector3d::Zero());
 
     // ROS Communication Setup
     publish_trigger_pub_         = n->advertise<std_msgs::Empty>("robot_manager/publish_trigger", 1);
@@ -237,7 +238,7 @@ MatrixXd HandManager::scenario_target(HandType type, string scenario, int i, Vec
         r_middle = (type == RIGHT) ? Vector3d(0.15, -0.1, -0.1) : Vector3d(0.15, 0.1, -0.1);
         r_target = (type == RIGHT) ? Vector3d(0.35, 0.1, 0.1) : Vector3d(0.35, -0.1, 0.1);
         double rot_angle = (type == RIGHT) ? 90 * M_PI / 180 : -90 * M_PI / 180;
-        R_target = hand_func.rot(3, rot_angle, 3) * hand_func.rot(1, -0 * M_PI / 180, 3);
+        R_target = hand_func.rot(3, rot_angle, 3) * hand_func.rot(1, -90 * M_PI / 180, 3);
     } else if (scenario == "perfect") {
         r_middle = (type == RIGHT) ? Vector3d(0.15, -0.1, -0.3) : Vector3d(0.15, 0.1, -0.3);
         r_target = (type == RIGHT) ? Vector3d(0.25, -0.05, -0.25) : Vector3d(0.25, 0.15, -0.15);
@@ -260,7 +261,17 @@ MatrixXd HandManager::scenario_target(HandType type, string scenario, int i, Vec
         r_middle = (type == RIGHT) ? Vector3d(0.2, -0.07, -0.25) : Vector3d(0.2, 0.07, -0.25);
         r_target = (type == RIGHT) ? Vector3d(0.02, -0.06, -0.46) : Vector3d(0.02, 0.06, -0.46);
         R_target = hand_func.rot(2, -20 * M_PI / 180, 3);
-    }  
+    }else if (scenario == "a") {
+        r_middle = (type == RIGHT) ? Vector3d(0.15, 0.0, -0.1) : Vector3d(0.25, 0.0, -0.15);
+        r_target = (type == RIGHT) ? Vector3d(0.2, 0.0, -0.15) : Vector3d(0.25, 0.0, -0.15);
+        double rot_angle = (type == RIGHT) ? 0 * M_PI / 180 : 0 * M_PI / 180;
+        R_target = hand_func.rot(2, -60 * M_PI / 180, 3) * hand_func.rot(1, rot_angle, 3);
+    } else if (scenario == "b") {
+        r_middle = (type == RIGHT) ? Vector3d(0.2, 0.0, -0.2) : Vector3d(0.35, -0.05, -0.2);
+        r_target = (type == RIGHT) ? Vector3d(0.25, 0.1, -0.2) : Vector3d(0.35, -0.1, -0.2);
+        double rot_angle = (type == RIGHT) ? 20 * M_PI / 180 : -20 * M_PI / 180;
+        R_target = hand_func.rot(2, -80 * M_PI / 180, 3) * hand_func.rot(1, rot_angle, 3); 
+    }
 
     q_arm.resize(7);
     q_init.resize(7);
@@ -475,11 +486,11 @@ void HandManager::sendHandMotorCommands(const VectorXd& q_rad_right, const Vecto
     // q_motor_temp[25] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
     //                     (((hand_func_R.wrist_left_calc(q_rad_right(5), q_rad_right(6))) - wrist_left_range[0]) / (wrist_left_range[1] - wrist_left_range[0])));
 
-    Vector2d wrist_res = hand_func_R.solve_wrist(-q_rad_right(5)*180/M_PI, q_rad_right(6)*180/M_PI); // (motor 25 (A), motor 24 (B))
-    if(int(wrist_res(1)) != -1){
-        q_motor_temp[24] = int(wrist_res(0));
-        q_motor_temp[25] = int(wrist_res(1));
-        right_wrist_res_temp = wrist_res;
+    Vector2d right_wrist_res = hand_func_R.solve_wrist(-q_rad_right(5)*180/M_PI, q_rad_right(6)*180/M_PI); // (motor 25 (A), motor 24 (B))
+    if(int(right_wrist_res(1)) != -1){
+        q_motor_temp[24] = int(right_wrist_res(0));
+        q_motor_temp[25] = int(right_wrist_res(1));
+        right_wrist_res_temp = right_wrist_res;
     } else {
         q_motor_temp[24] = int(right_wrist_res_temp(0));
         q_motor_temp[25] = int(right_wrist_res_temp(1));
@@ -489,9 +500,20 @@ void HandManager::sendHandMotorCommands(const VectorXd& q_rad_right, const Vecto
     q_motor_temp[26] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
                         (((q_rad_left(4) * 180 / M_PI) - wrist_yaw_range[0]) / (wrist_yaw_range[1] - wrist_yaw_range[0])));
     q_motor_temp[27] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
-                        (((hand_func_L.wrist_right_calc(q_rad_left(5), q_rad_left(6))) - (wrist_right_range[0])) / (wrist_right_range[1] - (wrist_right_range[0]))));
+                        (((hand_func_L.wrist_right_calc(-q_rad_left(5), -q_rad_left(6))) - (wrist_right_range[0])) / (wrist_right_range[1] - (wrist_right_range[0]))));
     q_motor_temp[28] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
-                        (((hand_func_L.wrist_left_calc(q_rad_left(5), q_rad_left(6))) - wrist_left_range[0]) / (wrist_left_range[1] - wrist_left_range[0])));
+                        (((hand_func_L.wrist_left_calc(-q_rad_left(5), -q_rad_left(6))) - wrist_left_range[0]) / (wrist_left_range[1] - wrist_left_range[0])));
+
+    // Vector2d left_wrist_res = hand_func_L.solve_wrist(q_rad_left(5)*180/M_PI, q_rad_left(6)*180/M_PI); // (motor 28 (A), motor 27 (B))
+    // if(int(left_wrist_res(1)) != -1){
+    //     q_motor_temp[27] = int(left_wrist_res(0));
+    //     q_motor_temp[28] = int(left_wrist_res(1));
+    //     left_wrist_res_temp = left_wrist_res;
+    // } else {
+    //     q_motor_temp[27] = int(left_wrist_res_temp(0));
+    //     q_motor_temp[28] = int(left_wrist_res_temp(1));
+    // }
+    cout <<q_motor_temp[26]<< ", "<<q_motor_temp[27]<<", "<<q_motor_temp[28]<<endl;
 
     hand_motor_commands_ = q_motor_temp; // Store for RobotManager
     last_q_motor = q_motor_temp; // Still useful for internal tracking if needed
@@ -607,9 +629,9 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             Eigen::VectorXd q_left_send = q_left;
             q_left_send.head(4) = q_left_send.head(4) - q_left_baseline_.head(4);
 
-            Eigen::Vector3d head_angles(0,0,0);
+            // Eigen::Vector3d head_angles(0,0,0);
             // head_follow_hand(RIGHT, q_send);
-            // Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
+            Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
 
             sendHandMotorCommands(q_send, q_left_send, head_angles);
             publish_trigger_pub_.publish(std_msgs::Empty());
@@ -665,9 +687,9 @@ bool HandManager::single_hand(hand_planner::move_hand_single::Request &req,
             Eigen::VectorXd q_right_send = q_right;
             q_right_send.head(4) = q_right_send.head(4) - q_right_baseline_.head(4);
 
-            Eigen::Vector3d head_angles(0,0,0);
+            // Eigen::Vector3d head_angles(0,0,0);
             // head_follow_hand(LEFT, q_send_l);
-            //// Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
+            Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
 
             sendHandMotorCommands(q_right_send, q_send_l, head_angles);
             sendHeadMotorCommands(head_angles);
@@ -877,6 +899,7 @@ bool HandManager::head_track_handler(hand_planner::head_track::Request &req, han
         q_left_send.head(4) = q_left_send.head(4) - q_left_baseline_.head(4);
 
         Vector3d head_angles(h_roll, h_pitch, h_yaw);
+        sendHeadMotorCommands(head_angles);
         sendHandMotorCommands(q_right_send, q_left_send, head_angles);
         publish_trigger_pub_.publish(std_msgs::Empty());
         rate_.sleep();
@@ -1019,12 +1042,12 @@ void HandManager::hand_keyboard_callback(const std_msgs::Int32::ConstPtr& msg)
     
     double dx=0, dy=0, dz=0;
     switch (code) {
-        case 'w': case 'W': dx = +0.05; break; // Forward
-        case 's': case 'S': dx = -0.05; break; // Backward
-        case 'a': case 'A': dy = +0.10; break; // To the left
-        case 'd': case 'D': dy = -0.10; break; // To the right
-        case 'u': case 'U': dz = +0.10; break; // Upward
-        case 'j': case 'J': dz = -0.10; break; // Downward
+        case 't': case 'T': dx = +0.05; break; // Forward
+        case 'g': case 'G': dx = -0.05; break; // Backward
+        case 'f': case 'F': dy = +0.10; break; // To the left
+        case 'h': case 'H': dy = -0.10; break; // To the right
+        case 'i': case 'I': dz = +0.10; break; // Upward
+        case 'k': case 'K': dz = -0.10; break; // Downward
         default: return;
     }
 
@@ -1051,9 +1074,9 @@ void HandManager::hand_keyboard_callback(const std_msgs::Int32::ConstPtr& msg)
     auto pub = [&](const Eigen::VectorXd& qr){
         Eigen::VectorXd q_left_send = q_left;
         q_left_send.head(4) = q_left_send.head(4) - q_left_baseline_.head(4);
-        Eigen::Vector3d head_angles(0,0,0);
-        head_follow_hand(RIGHT, qr);
-        // Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
+        // Eigen::Vector3d head_angles(0,0,0);
+        // head_follow_hand(RIGHT, qr);
+        Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
         sendHandMotorCommands(qr, q_left_send, head_angles);
         publish_trigger_pub_.publish(std_msgs::Empty());
     };
@@ -1278,9 +1301,9 @@ bool HandManager::move_hand_keyboard_handler(hand_planner::KeyboardJog::Request 
     auto pub = [&](const Eigen::VectorXd& qr){
         Eigen::VectorXd q_left_send = q_left;
         q_left_send.head(4) = q_left_send.head(4) - q_left_baseline_.head(4);
-        Eigen::Vector3d head_angles(0,0,0);
-        head_follow_hand(RIGHT, qr);
-        // Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
+        // Eigen::Vector3d head_angles(0,0,0);
+        // head_follow_hand(RIGHT, qr);
+        Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
         sendHandMotorCommands(qr, q_left_send, head_angles);
         publish_trigger_pub_.publish(std_msgs::Empty());
     };
@@ -1353,7 +1376,7 @@ bool HandManager::move_hand_general_handler(hand_planner::MoveHandGeneral::Reque
         q_send.head(4) = q_abs.head(4) - q_right_baseline_.head(4);
         Eigen::VectorXd q_left_send = q_left;
         q_left_send.head(4) = q_left_send.head(4) - q_left_baseline_.head(4);
-        head_follow_hand(RIGHT, q_send);
+        // head_follow_hand(RIGHT, q_send);
         Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
         sendHandMotorCommands(q_send, q_left_send, head_angles);
         // sendHandMotorCommands(q_send, q_left_send, Vector3d(0,0,0));
@@ -1481,7 +1504,7 @@ bool HandManager::move_hand_general_left_handler(hand_planner::MoveHandGeneral::
         q_send.head(4) = q_abs.head(4) - q_left_baseline_.head(4);
         Eigen::VectorXd q_right_send = q_right;
         q_right_send.head(4) = q_right_send.head(4) - q_right_baseline_.head(4);
-        head_follow_hand(LEFT, q_send);
+        // head_follow_hand(LEFT, q_send);
         Eigen::Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
         sendHandMotorCommands(q_right_send, q_send, head_angles);
         // sendHandMotorCommands(q_send, q_left_send, Vector3d(0,0,0));
@@ -1630,7 +1653,7 @@ bool HandManager::move_hands_general_handler(hand_planner::MoveHandsGeneral::Req
         q_right_send.head(4) = q_right_send.head(4) - q_right_baseline_.head(4);
         q_left_send.head(4)  = q_left_send.head(4)  - q_left_baseline_.head(4);
 
-        head_follow_hand(RIGHT, q_right_send);
+        // head_follow_hand(RIGHT, q_right_send);
         Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
         sendHandMotorCommands(q_right_send, q_left_send, head_angles);
         publish_trigger_pub_.publish(std_msgs::Empty());
@@ -1647,7 +1670,7 @@ bool HandManager::move_hands_general_handler(hand_planner::MoveHandsGeneral::Req
         q_right_send.head(4) = q_right_send.head(4) - q_right_baseline_.head(4);
         q_left_send.head(4)  = q_left_send.head(4)  - q_left_baseline_.head(4);
 
-        head_follow_hand(LEFT, q_left_send);
+        // head_follow_hand(LEFT, q_left_send);
         Vector3d head_angles(h_roll, -h_pitch, -h_yaw);
         sendHandMotorCommands(q_right_send, q_left_send, head_angles);
         publish_trigger_pub_.publish(std_msgs::Empty());
@@ -1896,7 +1919,7 @@ bool HandManager::arm_back_to_home_handler(hand_planner::arm_back_to_home::Reque
     q_target_l(6) = q_l(6);
 
     // Params
-    double segment_duration = 6;
+    double segment_duration = 2;
     if (segment_duration <= 0.0) segment_duration = T;
     int M_segment = static_cast<int>(segment_duration / T);
     if (M_segment == 0) M_segment = 1;
@@ -1920,8 +1943,8 @@ bool HandManager::arm_back_to_home_handler(hand_planner::arm_back_to_home::Reque
         double start_l = q_work_l(2);
         double end_l   = q_target_l(2);
 
-        for (int step = 0; step <= M_segment; ++step) {
-            double a = (M_segment > 0) ? static_cast<double>(step)/M_segment : 1.0;
+        for (int step = 0; step <= (M_segment-1); ++step) {
+            double a = (M_segment > 0) ? static_cast<double>(step)/(M_segment-1) : 1.0;
             q_work_r(2) = start_r + (end_r - start_r)*a;
             q_work_l(2) = start_l + (end_l - start_l)*a;
             pub(q_work_r,q_work_l);
@@ -1980,14 +2003,14 @@ bool HandManager::arm_home_service_handler(std_srvs::Empty::Request &req, std_sr
     const double ROLL_OPEN_ANGLE = 10.0 * M_PI / 180;
 
     // Joint offsets for homing at desired angles in radians
-    const double RIGHT_PITCH_OFFSET = 26.0 * M_PI / 180;
-    const double RIGHT_ROLL_OFFSET = 7.0 * M_PI / 180;
+    const double RIGHT_PITCH_OFFSET = 25.0 * M_PI / 180;
+    const double RIGHT_ROLL_OFFSET = 2.0 * M_PI / 180;
     const double RIGHT_YAW_OFFSET = 93.0 * M_PI / 180;
-    const double RIGHT_ELBOW_OFFSET = 14.0 * M_PI / 180;
-    const double LEFT_PITCH_OFFSET = 28.0 * M_PI / 180;
+    const double RIGHT_ELBOW_OFFSET = 12.0 * M_PI / 180;
+    const double LEFT_PITCH_OFFSET = 33.0 * M_PI / 180;
     const double LEFT_ROLL_OFFSET = 9.0 * M_PI / 180;
     const double LEFT_YAW_OFFSET = 103.0 * M_PI / 180;
-    const double LEFT_ELBOW_OFFSET = 19.0 * M_PI / 180;
+    const double LEFT_ELBOW_OFFSET = 21.0 * M_PI / 180;
     
     // Initialize joint positions (default to zero)
     Eigen::VectorXd q_right_current(7);
