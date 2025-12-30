@@ -60,6 +60,7 @@ find_package(yaml-cpp REQUIRED)
  add_service_files(
    FILES
    ExecuteScenario.srv
+   JointCommand.srv
  )
 
 ## Generate added messages and services with any dependencies listed here

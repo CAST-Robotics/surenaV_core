@@ -13,6 +13,7 @@
 
 // Include our new service definition
 #include "robot_manager/ExecuteScenario.h"
+#include <robot_manager/JointCommand.h>
 
 class RobotManager {
 public:
@@ -25,10 +26,10 @@ private:
     ros::NodeHandle* nh_;
     ros::ServiceServer execute_scenario_service_;
     ros::Subscriber publish_trigger_sub_;
+    ros::ServiceServer joint_command_service_;
 
     ros::Publisher combined_motor_pub_;     
     ros::Publisher combined_gazebo_pub_; 
-
 
     // --- Pointers to Specialized Managers ---
     std::unique_ptr<HandManager> hand_manager_;
@@ -43,12 +44,13 @@ private:
 
     // --- Service Handlers ---
     bool execute_scenario_callback(robot_manager::ExecuteScenario::Request &req, robot_manager::ExecuteScenario::Response &res);
-    
+    bool jointCommandCallback(robot_manager::JointCommand::Request &req, robot_manager::JointCommand::Response &res); 
     // --- Helper Function ---
     void load_scenarios_from_file();
     bool execute_step(const YAML::Node& step);
     void publishTriggerCallback(const std_msgs::Empty::ConstPtr& msg);
     void publishCombinedMotorCommands();
+    int32_t map_range(double val, double min_val, double max_val, double min_cmd, double max_cmd);
 };
 
 #endif // ROBOT_MANAGER_H

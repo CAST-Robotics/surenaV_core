@@ -8,7 +8,7 @@ GaitManager::GaitManager(ros::NodeHandle *n)
     absSub_ = n->subscribe("/surena/abs_joint_state", 100, &GaitManager::absReader, this);
     offsetSub_ = n->subscribe("/surena/inc_joint_state", 100, &GaitManager::qcInitial, this);
     incSub_ = n->subscribe("/surena/inc_joint_state", 100, &GaitManager::incReader, this);
-    jointCommand_ = n->advertiseService("joint_command", &GaitManager::sendCommand, this);
+    // jointCommand_ = n->advertiseService("joint_command", &GaitManager::sendCommand, this);
     absPrinter_ = n->advertiseService("print_absolute", &GaitManager::absPrinter, this);
     walkService_ = n->advertiseService("walk_service", &GaitManager::walk, this);
     keyboardWalkService_ = n->advertiseService("keyboard_walk", &GaitManager::keyboardWalk, this);
@@ -340,6 +340,7 @@ bool GaitManager::sendCommand(gait_planner::command::Request &req,
 
     ros::Rate rate_(200);
     this->emptyCommand();
+    ROS_INFO("Moving Joint sssssssss");
     if (req.motor_id == 4)
     {
 

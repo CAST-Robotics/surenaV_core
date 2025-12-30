@@ -15,6 +15,7 @@ RobotManager::RobotManager(ros::NodeHandle *n) :
     combined_motor_pub_       = nh_->advertise<std_msgs::Int32MultiArray>("jointdata/qc", 100);
     combined_gazebo_pub_      = nh_->advertise<std_msgs::Float64MultiArray>("/joint_angles_gazebo", 100);
     publish_trigger_sub_      = nh_->subscribe("robot_manager/publish_trigger", 1, &RobotManager::publishTriggerCallback, this);
+    joint_command_service_    = nh_->advertiseService("joint_command", &RobotManager::jointCommandCallback, this);
 }
 
 // --- YAML FILE LOADER ---
@@ -242,6 +243,162 @@ bool RobotManager::execute_step(const YAML::Node& step) {
         ROS_ERROR("Scenario step contains unknown service: %s", service_name.c_str());
         return false;
     }
+}
+
+int32_t RobotManager::map_range(double val, double min_val, double max_val, double min_cmd, double max_cmd) {
+    return int32_t(min_cmd + (max_cmd - min_cmd) * ((val - min_val) / (max_val - min_val)));
+}
+
+bool RobotManager::jointCommandCallback(robot_manager::JointCommand::Request &req, robot_manager::JointCommand::Response &res)
+{
+    int id = req.id;     
+    double angle_deg = req.angle;
+    const double JOINT_VELOCITY_DEG_S = 10.0;
+    const double DT = 0.005; 
+    static bool upper_body_initialized = false;
+
+
+    if (combined_motor_command_msg_.data.size() <= id) combined_motor_command_msg_.data.resize(32, 0);
+    int32_t current_inc = combined_motor_command_msg_.data[id];
+    if (combined_gazebo_command_msg_.data.size() <= id) combined_gazebo_command_msg_.data.resize(32, 0.0);
+    double current_rad = combined_gazebo_command_msg_.data[id];
+
+    if (!upper_body_initialized) {
+    bool all_zero = true;
+
+    for (int i = 19; i <= 28; ++i) {
+        if (combined_motor_command_msg_.data.size() > i &&
+            combined_motor_command_msg_.data[i] != 0) {
+            all_zero = false;
+            break;
+        }
+    }
+
+    if (all_zero) {
+        // Initialize mechanical zero positions
+        combined_motor_command_msg_.data[20] = 150;
+        combined_motor_command_msg_.data[21] = 140;
+        combined_motor_command_msg_.data[22] = 150;
+
+        for (int i = 23; i <= 28; ++i)
+            combined_motor_command_msg_.data[i] = 90;
+
+        // Gazebo zero
+        for (int i = 20; i <= 28; ++i)
+            combined_gazebo_command_msg_.data[i] = 0.0;
+
+        upper_body_initialized = true;
+
+        ROS_INFO("Upper body motors initialized to mechanical zero");
+    }
+    }
+
+    double encoderRes0 = 4096.0 * 4.0;
+    double encoderRes1 = 2048.0 * 4.0;
+    double ratio100 = 100.0;
+    double ratio400 = 400.0;
+
+    double roll_range[] = {-50, 50};   double roll_cmd[] = {100, 200};
+    double pitch_range[] = {-30, 30};  double pitch_cmd[] = {180, 140};
+    double yaw_range[] = {-90, 90};    double yaw_cmd[] = {90, 210};
+    
+    double wrist_cmd[] = {0, 180};
+    double wrist_yaw_range[] = {90, -90};
+    double wrist_right_range[] = {90, -90}; 
+    double wrist_left_range[] = {90, -90};
+
+    int32_t target_inc = 0;
+    double rad = angle_deg * M_PI / 180.0;
+
+    
+    // Calculate Motor Target (Increments)
+    switch (id) {
+        case 12: target_inc = int(rad * encoderRes0 * ratio100 / (2 * M_PI)); break;
+        case 13: target_inc = -int(rad * encoderRes0 * ratio100 / (2 * M_PI)); break;
+        case 14: target_inc = int(rad * encoderRes1 * ratio100 / (2 * M_PI)); break;
+        case 15: target_inc = -int(rad * encoderRes1 * ratio400 / (2 * M_PI)); break;
+        case 16: target_inc = -int(rad * encoderRes0 * ratio100 / (2 * M_PI)); break;
+        case 17: target_inc = -int(rad * encoderRes0 * ratio100 / (2 * M_PI)); break;
+        case 18: target_inc = int(rad * encoderRes1 * ratio100 / (2 * M_PI)); break;
+        case 19: target_inc = int(rad * encoderRes1 * ratio400 / (2 * M_PI)); break;
+        case 20: target_inc = map_range(-angle_deg, roll_range[0], roll_range[1], roll_cmd[0], roll_cmd[1]); break;
+        case 21: target_inc = map_range(-angle_deg, pitch_range[0], pitch_range[1], pitch_cmd[0], pitch_cmd[1]); break;
+        case 22: target_inc = map_range(-angle_deg, yaw_range[0], yaw_range[1], yaw_cmd[0], yaw_cmd[1]); break;
+        case 23: target_inc = map_range(angle_deg, wrist_yaw_range[0], wrist_yaw_range[1], wrist_cmd[0], wrist_cmd[1]); break;
+        case 24: target_inc = map_range(angle_deg, wrist_right_range[0], wrist_right_range[1], wrist_cmd[0], wrist_cmd[1]); break;
+        case 25: target_inc = map_range(angle_deg, wrist_left_range[0], wrist_left_range[1], wrist_cmd[0], wrist_cmd[1]); break;
+        case 26: target_inc = map_range(angle_deg, wrist_yaw_range[0], wrist_yaw_range[1], wrist_cmd[0], wrist_cmd[1]); break;
+        case 27: target_inc = map_range(angle_deg, wrist_right_range[0], wrist_right_range[1], wrist_cmd[0], wrist_cmd[1]); break;
+        case 28: target_inc = map_range(angle_deg, wrist_left_range[0], wrist_left_range[1], wrist_cmd[0], wrist_cmd[1]); break;
+        default:
+            ROS_ERROR("Invalid Upper Body Motor ID: %d", id);
+            res.result = false;
+            return true;
+    }
+
+
+    double target_rad_gazebo = -rad;
+    
+    if (id >= 20 && id <= 22) {
+        target_rad_gazebo = -rad; 
+    }
+
+    // TRAJECTORY GENERATION 
+    double diff_inc = (double)(target_inc - current_inc);
+    double diff_rad = target_rad_gazebo - current_rad;
+
+    double conversion_factor = 0;
+    if (id >= 20 && id <= 22) conversion_factor = 2.5; 
+    else {
+        double ratio = (id == 15 || id == 19) ? ratio400 : ratio100;
+        double res = (id == 14 || id == 15 || id == 18 || id == 19) ? encoderRes1 : encoderRes0;
+        conversion_factor = (res * ratio) / 360.0;
+    }
+    
+    double travel_deg = std::abs(diff_inc) / conversion_factor; 
+    double duration = travel_deg / JOINT_VELOCITY_DEG_S;
+    
+    int steps = (int)(duration / DT);
+    if (steps < 1) steps = 1;
+
+    double inc_step = diff_inc / steps;
+    double rad_step = diff_rad / steps; 
+
+    double accumulator = (double)current_inc;
+    double accumulator_rad = current_rad;
+
+    ROS_INFO("Moving Joint %d: Current(inc): %d, Target(inc): %d, Steps: %d", id, current_inc, target_inc, steps);
+
+    ros::Rate rate(1.0/DT);
+
+    for (int i = 0; i < steps; ++i) {
+        accumulator += inc_step;
+        accumulator_rad += rad_step;
+        
+        combined_motor_command_msg_.data[id] = (int32_t)accumulator;
+        combined_gazebo_command_msg_.data[id] = accumulator_rad; 
+
+        if (simulation) {
+            combined_gazebo_pub_.publish(combined_gazebo_command_msg_);
+        } else {
+            combined_motor_pub_.publish(combined_motor_command_msg_);
+        }
+        
+        ros::spinOnce(); 
+        rate.sleep();
+    }
+
+    combined_motor_command_msg_.data[id] = target_inc;
+    combined_gazebo_command_msg_.data[id] = target_rad_gazebo;
+
+    if (simulation) {
+        combined_gazebo_pub_.publish(combined_gazebo_command_msg_);
+    } else {
+        combined_motor_pub_.publish(combined_motor_command_msg_);
+    }
+
+    res.result = true;
+    return true;
 }
 
 void RobotManager::publishTriggerCallback(const std_msgs::Empty::ConstPtr& msg) {
