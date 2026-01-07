@@ -1,12 +1,12 @@
 {
   "scenarios": {
-    "grip_soft": {
-      "name": "grip_soft",
+    "soft_grip": {
+      "name": "soft_grip",
       "target_positions": [150, 150, 150, 150, 150, 150],
       "control_data": 1
     },
-    "grip_firm": {
-      "name": "grip_firm",
+    "firm_grip": {
+      "name": "firm_grip",
       "target_positions": [100, 100, 100, 100, 100, 100],
       "control_data": 1
     },
@@ -18,6 +18,36 @@
     "power_grip": {
       "name": "power_grip",
       "target_positions": [55, 55, 55, 55, 55, 55],
+      "control_data": 1
+    },
+    "pinch": {
+      "name": "pinch",
+      "target_positions": [30, 230, 240, 240, 50, 150],
+      "control_data": 1
+    },
+    "spherical": {
+      "name": "spherical",
+      "target_positions": [100, 100, 100, 50, 200, 240],
+      "control_data": 1
+    },
+    "cylindrical": {
+      "name": "cylindrical",
+      "target_positions": [180, 180, 180, 180, 250, 100],
+      "control_data": 1
+    },
+    "writing": {
+      "name": "writing",
+      "target_positions": [100, 80, 10, 10, 100, 220],
+      "control_data": 1
+    },
+    "hook": {
+      "name": "hook",
+      "target_positions": [100, 80, 10, 10, 100, 220],
+      "control_data": 1
+    },
+    "pointing": {
+      "name": "pointing",
+      "target_positions": [250, 10, 10, 10, 50, 220],
       "control_data": 1
     }
   }

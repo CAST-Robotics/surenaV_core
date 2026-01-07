@@ -498,7 +498,7 @@ void HandManager::sendHandMotorCommands(const VectorXd& q_rad_right, const Vecto
 
     // Wrist calculations for left hand (indices 26-28)
     q_motor_temp[26] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
-                        (((q_rad_left(4) * 180 / M_PI) - wrist_yaw_range[0]) / (wrist_yaw_range[1] - wrist_yaw_range[0])));
+                        (((-q_rad_left(4) * 180 / M_PI) - wrist_yaw_range[0]) / (wrist_yaw_range[1] - wrist_yaw_range[0])));
     q_motor_temp[27] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
                         (((hand_func_L.wrist_right_calc(-q_rad_left(5), -q_rad_left(6))) - (wrist_right_range[0])) / (wrist_right_range[1] - (wrist_right_range[0]))));
     q_motor_temp[28] = int(wrist_command_range[0] + (wrist_command_range[1] - wrist_command_range[0]) *
@@ -513,7 +513,7 @@ void HandManager::sendHandMotorCommands(const VectorXd& q_rad_right, const Vecto
     //     q_motor_temp[27] = int(left_wrist_res_temp(0));
     //     q_motor_temp[28] = int(left_wrist_res_temp(1));
     // }
-    cout <<q_motor_temp[26]<< ", "<<q_motor_temp[27]<<", "<<q_motor_temp[28]<<endl;
+    // cout <<q_motor_temp[26]<< ", "<<q_motor_temp[27]<<", "<<q_motor_temp[28]<<endl;
 
     hand_motor_commands_ = q_motor_temp; // Store for RobotManager
     last_q_motor = q_motor_temp; // Still useful for internal tracking if needed

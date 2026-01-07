@@ -908,7 +908,7 @@ void GaitManager::keyboardHandler(const std_msgs::Int32 &msg)
         {
         case 119: // w: move forward with arm swing
             step_count = 4;
-            step_length = 0.12;
+            step_length = 0.16;
             theta = 0.0;
             robot->trajGen(step_count, t_step, alpha, t_double_support, COM_height, step_length, 
                            step_width, dt, theta, ankle_height, step_height, slope, offset, is_config);
